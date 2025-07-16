@@ -107,67 +107,63 @@ const Dashboard = () => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600">Welcome back! Here's your portfolio overview.</p>
+          <h1 className="text-3xl font-extrabold text-quant-gold font-mono drop-shadow-lg">QuantaVista Dashboard</h1>
+          <p className="text-quant-green font-mono">Welcome back! Here's your portfolio overview.</p>
         </div>
-        <button className="btn-primary flex items-center">
+        <button className="btn-quant flex items-center">
           <PlusIcon className="h-4 w-4 mr-2" />
           Add Stock
         </button>
       </div>
-
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white rounded-lg shadow-sm p-6">
+        <div className="card-quant">
           <div className="flex items-center">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <CurrencyDollarIcon className="h-6 w-6 text-blue-600" />
+            <div className="p-2 bg-quant-dark rounded-lg">
+              <CurrencyDollarIcon className="h-6 w-6 text-quant-gold" />
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Total Value</p>
-              <p className="text-2xl font-bold text-gray-900">
+              <p className="text-sm font-medium text-quant-green">Total Value</p>
+              <p className="text-2xl font-bold text-quant-gold">
                 {formatCurrency(analytics?.totalValue || 0)}
               </p>
             </div>
           </div>
         </div>
-
-        <div className="bg-white rounded-lg shadow-sm p-6">
+        <div className="card-quant">
           <div className="flex items-center">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <ChartBarIcon className="h-6 w-6 text-green-600" />
+            <div className="p-2 bg-quant-dark rounded-lg">
+              <ChartBarIcon className="h-6 w-6 text-quant-green" />
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Total Gain/Loss</p>
+              <p className="text-sm font-medium text-quant-green">Total Gain/Loss</p>
               <p className={`text-2xl font-bold ${getColorForPerformance(analytics?.totalGainLoss || 0)}`}>
                 {formatCurrency(analytics?.totalGainLoss || 0)}
               </p>
             </div>
           </div>
         </div>
-
-        <div className="bg-white rounded-lg shadow-sm p-6">
+        <div className="card-quant">
           <div className="flex items-center">
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <ArrowTrendingUpIcon className="h-6 w-6 text-purple-600" />
+            <div className="p-2 bg-quant-dark rounded-lg">
+              <ArrowTrendingUpIcon className="h-6 w-6 text-quant-gold" />
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Performance</p>
+              <p className="text-sm font-medium text-quant-green">Performance</p>
               <p className={`text-2xl font-bold ${getColorForPerformance(analytics?.totalGainLossPercentage || 0)}`}>
                 {formatPercentage(analytics?.totalGainLossPercentage || 0)}
               </p>
             </div>
           </div>
         </div>
-
-        <div className="bg-white rounded-lg shadow-sm p-6">
+        <div className="card-quant">
           <div className="flex items-center">
-            <div className="p-2 bg-orange-100 rounded-lg">
-              <EyeIcon className="h-6 w-6 text-orange-600" />
+            <div className="p-2 bg-quant-dark rounded-lg">
+              <EyeIcon className="h-6 w-6 text-quant-gold" />
             </div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Total Stocks</p>
-              <p className="text-2xl font-bold text-gray-900">
+              <p className="text-sm font-medium text-quant-green">Total Stocks</p>
+              <p className="text-2xl font-bold text-quant-gold">
                 {analytics?.totalStocks || 0}
               </p>
             </div>

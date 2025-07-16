@@ -1,4 +1,6 @@
 const express = require('express');
+const { spawn } = require('child_process');
+const path = require('path');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const authenticateToken = (req, res, next) => {
@@ -17,6 +19,163 @@ const authenticateToken = (req, res, next) => {
     next();
   });
 };
+
+// Route to analyze a specific stock
+router.post('/analyze', async (req, res) => {
+  try {
+    const { ticker, daysAhead = 30 } = req.body;
+    
+    if (!ticker) {
+      return res.status(400).json({ 
+        error: 'Ticker symbol is required',
+        success: false 
+      });
+    }
+
+    // Path to the Python script
+    const pythonScriptPath = path.join(__dirname, '../../ml/lstm_stock_predictor.py');
+    
+    // Spawn Python process
+    const pythonProcess = spawn('python', [pythonScriptPath, ticker.toUpperCase(), daysAhead.toString()]);
+    
+    let result = '';
+    let error = '';
+
+    // Collect data from Python script
+    pythonProcess.stdout.on('data', (data) => {
+      result += data.toString();
+    });
+
+    pythonProcess.stderr.on('data', (data) => {
+      error += data.toString();
+    });
+
+    // Handle process completion
+    pythonProcess.on('close', (code) => {
+      if (code !== 0) {
+        console.error('Python script error:', error);
+        return res.status(500).json({
+          error: 'Failed to analyze stock',
+          details: error,
+          success: false
+        });
+      }
+
+      try {
+        // Parse the JSON result from Python
+        const stockData = JSON.parse(result);
+        
+        if (!stockData.success) {
+          return res.status(400).json(stockData);
+        }
+
+        res.json({
+          ...stockData,
+          success: true
+        });
+      } catch (parseError) {
+        console.error('Error parsing Python output:', parseError);
+        res.status(500).json({
+          error: 'Invalid response from analysis script',
+          success: false
+        });
+      }
+    });
+
+    // Handle process errors
+    pythonProcess.on('error', (err) => {
+      console.error('Failed to start Python process:', err);
+      res.status(500).json({
+        error: 'Failed to start analysis process',
+        success: false
+      });
+    });
+
+  } catch (error) {
+    console.error('Stock analysis error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      success: false
+    });
+  }
+});
+
+// Route to get stock data without prediction
+router.get('/data/:ticker', async (req, res) => {
+  try {
+    const { ticker } = req.params;
+    const { period = '1y' } = req.query;
+    
+    if (!ticker) {
+      return res.status(400).json({ 
+        error: 'Ticker symbol is required',
+        success: false 
+      });
+    }
+
+    // Path to the Python script
+    const pythonScriptPath = path.join(__dirname, '../../ml/lstm_stock_predictor.py');
+    
+    // Spawn Python process to get just the data
+    const pythonProcess = spawn('python', [pythonScriptPath, ticker.toUpperCase(), '--data-only']);
+    
+    let result = '';
+    let error = '';
+
+    pythonProcess.stdout.on('data', (data) => {
+      result += data.toString();
+    });
+
+    pythonProcess.stderr.on('data', (data) => {
+      error += data.toString();
+    });
+
+    pythonProcess.on('close', (code) => {
+      if (code !== 0) {
+        console.error('Python script error:', error);
+        return res.status(500).json({
+          error: 'Failed to fetch stock data',
+          details: error,
+          success: false
+        });
+      }
+
+      try {
+        const stockData = JSON.parse(result);
+        
+        if (!stockData.success) {
+          return res.status(400).json(stockData);
+        }
+
+        res.json({
+          ...stockData,
+          success: true
+        });
+      } catch (parseError) {
+        console.error('Error parsing Python output:', parseError);
+        res.status(500).json({
+          error: 'Invalid response from data script',
+          success: false
+        });
+      }
+    });
+
+    pythonProcess.on('error', (err) => {
+      console.error('Failed to start Python process:', err);
+      res.status(500).json({
+        error: 'Failed to start data fetch process',
+        success: false
+      });
+    });
+
+  } catch (error) {
+    console.error('Stock data fetch error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      success: false
+    });
+  }
+});
 
 // Get stock quote
 router.get('/quote/:symbol', authenticateToken, async (req, res) => {

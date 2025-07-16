@@ -3,13 +3,16 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { Toaster } from 'react-hot-toast';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
+import MarketStatusBar from './components/MarketStatusBar';
 import Dashboard from './pages/Dashboard';
 import Portfolio from './pages/Portfolio';
 import SignUp from './pages/SignUp';
 import Login from './pages/Login';
 import AIChat from './pages/AIChat';
 import News from './pages/News';
+import StockAnalysis from './pages/StockAnalysis';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import './App.css';
 
 function AppContent() {
@@ -18,7 +21,7 @@ function AppContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-quant-gradient">
         <div className="spinner"></div>
       </div>
     );
@@ -27,7 +30,7 @@ function AppContent() {
   if (!user) {
     return (
       <Router>
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="min-h-screen bg-quant-gradient flex flex-col justify-center items-center">
           <Routes>
             <Route path="/signup" element={<SignUp />} />
             <Route path="/login" element={<Login />} />
@@ -41,22 +44,22 @@ function AppContent() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-gray-50">
-        <Navbar onMenuClick={() => setSidebarOpen(true)} />
-        <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-        
-        <div className="lg:pl-64">
-          <main className="p-4 sm:p-6 lg:p-8">
+      <div className="min-h-screen bg-quant-gradient flex">
+        <Navbar onMenuClick={() => setSidebarOpen(true)} appName="QuantaVista" />
+        <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} appName="QuantaVista" />
+        <div className="flex-1 flex flex-col lg:pl-64 pt-16">
+          <MarketStatusBar />
+          <main className="flex-1 p-2 sm:p-4 lg:p-6 w-full max-w-7xl mx-auto">
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/portfolio" element={<Portfolio />} />
               <Route path="/ai-chat" element={<AIChat />} />
               <Route path="/news" element={<News />} />
+              <Route path="/stock-analysis" element={<StockAnalysis />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </main>
         </div>
-        
         <Toaster position="top-right" />
       </div>
     </Router>
@@ -66,7 +69,9 @@ function AppContent() {
 function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <NotificationProvider>
+        <AppContent />
+      </NotificationProvider>
     </AuthProvider>
   );
 }

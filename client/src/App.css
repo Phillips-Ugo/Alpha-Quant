@@ -67,4 +67,145 @@
 .fade-exit-active {
   opacity: 0;
   transition: opacity 300ms ease-in;
+}
+
+body, html {
+  font-family: 'Fira Mono', 'Roboto Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+  background: linear-gradient(135deg, #101522 0%, #232946 100%);
+  color: #e5e5e5;
+  min-height: 100vh;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  background: #232946;
+}
+::-webkit-scrollbar-thumb {
+  background: #101522;
+  border-radius: 4px;
+}
+
+/* Navbar and Sidebar shadow and transition */
+nav, .sidebar {
+  box-shadow: 0 4px 24px 0 rgba(16, 21, 34, 0.15);
+  transition: background 0.3s, color 0.3s;
+}
+
+/* Accent colors for quant/finance theme */
+.text-quant-gold {
+  color: #ffd700;
+}
+.text-quant-green {
+  color: #00ff99;
+}
+.bg-quant-dark {
+  background: #101522;
+}
+.bg-quant-gradient {
+  background: linear-gradient(135deg, #101522 0%, #232946 100%);
+}
+
+/* Button styles for quant/finance */
+.btn-quant {
+  background: linear-gradient(90deg, #ffd700 0%, #00ff99 100%);
+  color: #101522;
+  font-weight: bold;
+  border-radius: 8px;
+  padding: 0.5rem 1.5rem;
+  transition: background 0.2s, color 0.2s;
+}
+.btn-quant:hover {
+  background: linear-gradient(90deg, #00ff99 0%, #ffd700 100%);
+  color: #232946;
+}
+
+/* Card styles for dashboard and analysis */
+.card-quant {
+  background: rgba(16, 21, 34, 0.85);
+  border: 1px solid #232946;
+  border-radius: 1rem;
+  box-shadow: 0 8px 32px 0 rgba(16, 21, 34, 0.25);
+  padding: 2rem;
+  margin-bottom: 2rem;
+  color: #ffd700;
+}
+
+/* Wall Street style animations */
+@keyframes scroll-left {
+  0% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+.animate-scroll-left {
+  animation: scroll-left 30s linear infinite;
+}
+
+/* Market data hover effects */
+.market-item {
+  transition: all 0.3s ease;
+}
+
+.market-item:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+}
+
+/* Flashing market status */
+@keyframes flash {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0.7; }
+}
+
+.flash-animation {
+  animation: flash 1s ease-in-out infinite;
+}
+
+/* Price change animations */
+@keyframes price-up {
+  0% { background-color: transparent; }
+  50% { background-color: rgba(34, 197, 94, 0.2); }
+  100% { background-color: transparent; }
+}
+
+@keyframes price-down {
+  0% { background-color: transparent; }
+  50% { background-color: rgba(239, 68, 68, 0.2); }
+  100% { background-color: transparent; }
+}
+
+.price-up-animation {
+  animation: price-up 0.5s ease-in-out;
+}
+
+.price-down-animation {
+  animation: price-down 0.5s ease-in-out;
+}
+
+/* Wall Street ticker style */
+.ticker-container {
+  background: linear-gradient(90deg, rgba(16, 21, 34, 0.9) 0%, rgba(35, 41, 70, 0.9) 100%);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.1);
+}
+
+/* Enhanced market status bar */
+.market-status-bar {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  border-bottom: 2px solid rgba(255, 215, 0, 0.3);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* Stock price pulse effect */
+@keyframes price-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+.price-pulse {
+  animation: price-pulse 2s ease-in-out infinite;
 } 
