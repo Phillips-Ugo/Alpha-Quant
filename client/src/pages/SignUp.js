@@ -145,16 +145,16 @@ const SignUp = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-quant-gradient flex items-center justify-center p-4">
       <div className="max-w-4xl w-full">
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+        <div className="card-quant overflow-hidden">
           <div className="md:flex">
             {/* Left side - Form */}
             <div className="md:w-1/2 p-8">
               <div className="text-center mb-8">
-                <ChartBarIcon className="h-12 w-12 text-blue-600 mx-auto mb-4" />
-                <h2 className="text-3xl font-bold text-gray-900">Create Account</h2>
-                <p className="text-gray-600 mt-2">Start your financial analysis journey</p>
+                <ChartBarIcon className="h-12 w-12 text-quant-green mx-auto mb-4" />
+                <h2 className="text-3xl font-extrabold text-quant-gold font-mono">Create Account - QuantaVista</h2>
+                <p className="text-quant-green font-mono mt-2">Start your financial analysis journey</p>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-6">

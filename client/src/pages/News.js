@@ -121,42 +121,29 @@ const News = () => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">News & Market Events</h1>
-          <p className="text-gray-600">Stay informed about market trends and their impact on your portfolio</p>
+          <h1 className="text-3xl font-extrabold text-quant-gold font-mono drop-shadow-lg">QuantaVista News & Market Events</h1>
+          <p className="text-quant-green font-mono">Stay informed about market trends and their impact on your portfolio</p>
         </div>
       </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
           {/* Market Sentiment */}
           {sentiment && (
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Market Sentiment</h3>
+            <div className="card-quant">
+              <h3 className="text-lg font-semibold text-quant-gold mb-4">Market Sentiment</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="text-center">
-                  <p className="text-sm text-gray-600">Overall</p>
-                  <p className={`text-lg font-semibold ${getSentimentColor(sentiment.score)}`}>
-                    {sentiment.overall}
-                  </p>
+                  <p className="text-sm text-quant-green">Overall</p>
+                  <p className={`text-lg font-semibold ${getSentimentColor(sentiment.score)}`}>{sentiment.overall}</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-sm text-gray-600">Fear & Greed</p>
-                  <p className="text-lg font-semibold text-gray-900">
-                    {sentiment.indicators.fearGreedIndex}
-                  </p>
+                  <p className="text-sm text-quant-green">Fear & Greed</p>
+                  <p className="text-lg font-semibold text-quant-gold">{sentiment.indicators.fearGreedIndex}</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-sm text-gray-600">Volatility</p>
-                  <p className="text-lg font-semibold text-gray-900">
-                    {sentiment.indicators.volatilityIndex}
-                  </p>
-                </div>
-                <div className="text-center">
-                  <p className="text-sm text-gray-600">Momentum</p>
-                  <p className="text-lg font-semibold text-gray-900 capitalize">
-                    {sentiment.indicators.marketMomentum.replace('_', ' ')}
-                  </p>
+                  <p className="text-sm text-quant-green">Volatility</p>
+                  <p className="text-lg font-semibold text-quant-gold">{sentiment.indicators.volatilityIndex}</p>
                 </div>
               </div>
             </div>
