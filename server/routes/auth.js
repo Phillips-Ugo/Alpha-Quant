@@ -1,96 +1,54 @@
 const express = require('express');
-const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const router = express.Router();
-
-// In-memory user storage (replace with database in production)
-let users = [];
+const userService = require('../services/userService');
 
 // Register endpoint
 router.post('/register', async (req, res) => {
   try {
     const { email, password, name } = req.body;
 
-    // Check if user already exists
-    const existingUser = users.find(user => user.email === email);
-    if (existingUser) {
-      return res.status(400).json({ error: 'User already exists' });
-    }
-
-    // Hash password
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-    // Create new user
-    const newUser = {
-      id: Date.now().toString(),
-      email,
-      password: hashedPassword,
-      name,
-      portfolio: [],
-      createdAt: new Date()
-    };
-
-    users.push(newUser);
-
+    // Create new user using the service
+    const user = await userService.createUser(email, password, name);
+    
     // Generate JWT token
-    const token = jwt.sign(
-      { userId: newUser.id, email: newUser.email },
-      process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '24h' }
-    );
+    const token = userService.generateToken(user);
 
     res.status(201).json({
       message: 'User registered successfully',
       token,
-      user: {
-        id: newUser.id,
-        email: newUser.email,
-        name: newUser.name
-      }
+      user
     });
   } catch (error) {
     console.error('Registration error:', error);
-    res.status(500).json({ error: 'Registration failed' });
+    res.status(500).json({ error: error.message || 'Registration failed' });
   }
 });
 
 // Login endpoint
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, rememberMe } = req.body;
 
-    // Find user
-    const user = users.find(u => u.email === email);
-    if (!user) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    // Check password
-    const isValidPassword = await bcrypt.compare(password, user.password);
-    if (!isValidPassword) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    // Generate JWT token
+    // Authenticate user using the service
+    const user = await userService.authenticateUser(email, password);
+    
+    // Generate JWT token with extended expiration if remember me is checked
+    const tokenExpiration = rememberMe ? '30d' : '7d';
     const token = jwt.sign(
       { userId: user.id, email: user.email },
       process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '24h' }
+      { expiresIn: tokenExpiration }
     );
 
     res.json({
       message: 'Login successful',
       token,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name
-      }
+      user
     });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ error: 'Login failed' });
+    res.status(401).json({ error: error.message || 'Login failed' });
   }
 });
 
@@ -103,29 +61,33 @@ const authenticateToken = (req, res, next) => {
     return res.status(401).json({ error: 'Access token required' });
   }
 
-  jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key', (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: 'Invalid token' });
-    }
-    req.user = user;
+  try {
+    const decoded = userService.verifyToken(token);
+    req.user = decoded;
     next();
-  });
+  } catch (error) {
+    return res.status(403).json({ error: 'Invalid token' });
+  }
 };
 
 // Get current user
-router.get('/me', authenticateToken, (req, res) => {
-  const user = users.find(u => u.id === req.user.userId);
-  if (!user) {
-    return res.status(404).json({ error: 'User not found' });
+router.get('/me', authenticateToken, async (req, res) => {
+  try {
+    const user = await userService.getUserById(req.user.userId);
+    res.json({ user });
+  } catch (error) {
+    res.status(404).json({ error: 'User not found' });
   }
+});
 
-  res.json({
-    user: {
-      id: user.id,
-      email: user.email,
-      name: user.name
-    }
-  });
+// Admin route to get all users (for debugging - remove in production)
+router.get('/admin/users', authenticateToken, async (req, res) => {
+  try {
+    const users = await userService.getAllUsers();
+    res.json({ users });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to get users' });
+  }
 });
 
 module.exports = router; 

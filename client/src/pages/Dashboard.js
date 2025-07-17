@@ -43,9 +43,9 @@ const Dashboard = () => {
         axios.get('/api/stocks/market-overview')
       ]);
 
-      setPortfolio(portfolioRes.data.portfolio);
-      setAnalytics(analyticsRes.data);
-      setMarketOverview(marketRes.data);
+      setPortfolio(portfolioRes.data.portfolio || []);
+      setAnalytics(analyticsRes.data || {});
+      setMarketOverview(marketRes.data || {});
     } catch (error) {
       console.error('Dashboard data fetch error:', error);
       toast.error('Failed to load dashboard data');

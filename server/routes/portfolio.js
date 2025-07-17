@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
+const yahooFinanceService = require('../services/yahooFinance');
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -18,18 +19,30 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// In-memory portfolio storage (replace with database in production)
-let portfolios = {};
+// Persistent portfolio storage using user service
+const userService = require('../services/userService');
 
-// Get user portfolio
-router.get('/', authenticateToken, (req, res) => {
+// Get user portfolio with real-time data
+router.get('/', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
     const userPortfolio = portfolios[userId] || [];
     
+    if (userPortfolio.length === 0) {
+      return res.json({
+        portfolio: [],
+        totalValue: 0
+      });
+    }
+
+    // Get real-time portfolio data
+    const portfolioData = await yahooFinanceService.calculatePortfolioValue(userPortfolio);
+    
     res.json({
-      portfolio: userPortfolio,
-      totalValue: calculateTotalValue(userPortfolio)
+      portfolio: portfolioData.holdings,
+      totalValue: portfolioData.totalValue,
+      totalGainLoss: portfolioData.totalGainLoss,
+      totalGainLossPercent: portfolioData.totalGainLossPercent
     });
   } catch (error) {
     console.error('Get portfolio error:', error);
@@ -47,8 +60,8 @@ router.post('/add', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Get current stock price (mock data for now)
-    const currentPrice = await getCurrentStockPrice(symbol);
+    // Get real-time stock data
+    const stockQuote = await yahooFinanceService.getStockQuote(symbol.toUpperCase());
     
     const stockEntry = {
       id: Date.now().toString(),
@@ -56,10 +69,11 @@ router.post('/add', authenticateToken, async (req, res) => {
       shares: parseFloat(shares),
       purchasePrice: parseFloat(purchasePrice),
       purchaseDate: purchaseDate || new Date().toISOString(),
-      currentPrice,
-      totalValue: parseFloat(shares) * currentPrice,
-      gainLoss: (currentPrice - parseFloat(purchasePrice)) * parseFloat(shares),
-      gainLossPercentage: ((currentPrice - parseFloat(purchasePrice)) / parseFloat(purchasePrice)) * 100
+      avgPrice: parseFloat(purchasePrice), // For compatibility with Yahoo Finance service
+      currentPrice: stockQuote.currentPrice,
+      totalValue: parseFloat(shares) * stockQuote.currentPrice,
+      gainLoss: (stockQuote.currentPrice - parseFloat(purchasePrice)) * parseFloat(shares),
+      gainLossPercentage: ((stockQuote.currentPrice - parseFloat(purchasePrice)) / parseFloat(purchasePrice)) * 100
     };
 
     if (!portfolios[userId]) {
@@ -73,25 +87,31 @@ router.post('/add', authenticateToken, async (req, res) => {
       // Update existing stock
       const existing = portfolios[userId][existingIndex];
       const totalShares = existing.shares + stockEntry.shares;
-      const avgPurchasePrice = ((existing.shares * existing.purchasePrice) + (stockEntry.shares * stockEntry.purchasePrice)) / totalShares;
+      const avgPurchasePrice = ((existing.shares * existing.avgPrice) + (stockEntry.shares * stockEntry.avgPrice)) / totalShares;
       
       portfolios[userId][existingIndex] = {
         ...existing,
         shares: totalShares,
-        purchasePrice: avgPurchasePrice,
-        totalValue: totalShares * currentPrice,
-        gainLoss: (currentPrice - avgPurchasePrice) * totalShares,
-        gainLossPercentage: ((currentPrice - avgPurchasePrice) / avgPurchasePrice) * 100
+        avgPrice: avgPurchasePrice,
+        currentPrice: stockQuote.currentPrice,
+        totalValue: totalShares * stockQuote.currentPrice,
+        gainLoss: (stockQuote.currentPrice - avgPurchasePrice) * totalShares,
+        gainLossPercentage: ((stockQuote.currentPrice - avgPurchasePrice) / avgPurchasePrice) * 100
       };
     } else {
       // Add new stock
       portfolios[userId].push(stockEntry);
     }
 
+    // Get updated portfolio with real-time data
+    const portfolioData = await yahooFinanceService.calculatePortfolioValue(portfolios[userId]);
+
     res.status(201).json({
       message: 'Stock added to portfolio',
-      portfolio: portfolios[userId],
-      totalValue: calculateTotalValue(portfolios[userId])
+      portfolio: portfolioData.holdings,
+      totalValue: portfolioData.totalValue,
+      totalGainLoss: portfolioData.totalGainLoss,
+      totalGainLossPercent: portfolioData.totalGainLossPercent
     });
   } catch (error) {
     console.error('Add stock error:', error);
@@ -165,23 +185,33 @@ router.delete('/remove/:stockId', authenticateToken, (req, res) => {
 });
 
 // Get portfolio analytics
-router.get('/analytics', authenticateToken, (req, res) => {
+router.get('/analytics', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
     const portfolio = portfolios[userId] || [];
 
+    // Get real-time portfolio data with sector information
+    const portfolioData = await yahooFinanceService.calculatePortfolioValue(portfolio);
+    
+    // Calculate sector breakdown from real data
+    const sectorBreakdown = {};
+    portfolioData.holdings.forEach(stock => {
+      const sector = stock.sector || 'Unknown';
+      sectorBreakdown[sector] = (sectorBreakdown[sector] || 0) + stock.currentValue;
+    });
+
     const analytics = {
       totalStocks: portfolio.length,
-      totalValue: calculateTotalValue(portfolio),
-      totalGainLoss: portfolio.reduce((sum, stock) => sum + stock.gainLoss, 0),
-      totalGainLossPercentage: calculateTotalGainLossPercentage(portfolio),
-      topPerformers: portfolio
-        .sort((a, b) => b.gainLossPercentage - a.gainLossPercentage)
+      totalValue: portfolioData.totalValue,
+      totalGainLoss: portfolioData.totalGainLoss,
+      totalGainLossPercentage: portfolioData.totalGainLossPercent,
+      topPerformers: portfolioData.holdings
+        .sort((a, b) => b.gainLossPercent - a.gainLossPercent)
         .slice(0, 5),
-      worstPerformers: portfolio
-        .sort((a, b) => a.gainLossPercentage - b.gainLossPercentage)
+      worstPerformers: portfolioData.holdings
+        .sort((a, b) => a.gainLossPercent - b.gainLossPercent)
         .slice(0, 5),
-      sectorBreakdown: calculateSectorBreakdown(portfolio)
+      sectorBreakdown: sectorBreakdown
     };
 
     res.json(analytics);

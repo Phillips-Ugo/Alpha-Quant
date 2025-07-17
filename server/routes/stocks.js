@@ -3,6 +3,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
+const yahooFinanceService = require('../services/yahooFinance');
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -113,65 +114,117 @@ router.get('/data/:ticker', async (req, res) => {
       });
     }
 
-    // Path to the Python script
-    const pythonScriptPath = path.join(__dirname, '../../ml/lstm_stock_predictor.py');
-    
-    // Spawn Python process to get just the data
-    const pythonProcess = spawn('python', [pythonScriptPath, ticker.toUpperCase(), '--data-only']);
-    
-    let result = '';
-    let error = '';
-
-    pythonProcess.stdout.on('data', (data) => {
-      result += data.toString();
-    });
-
-    pythonProcess.stderr.on('data', (data) => {
-      error += data.toString();
-    });
-
-    pythonProcess.on('close', (code) => {
-      if (code !== 0) {
-        console.error('Python script error:', error);
-        return res.status(500).json({
-          error: 'Failed to fetch stock data',
-          details: error,
-          success: false
-        });
-      }
-
-      try {
-        const stockData = JSON.parse(result);
-        
-        if (!stockData.success) {
-          return res.status(400).json(stockData);
-        }
+    // Get real-time stock data from Yahoo Finance
+    const stockData = await yahooFinanceService.getStockQuote(ticker.toUpperCase());
 
         res.json({
           ...stockData,
           success: true
-        });
-      } catch (parseError) {
-        console.error('Error parsing Python output:', parseError);
-        res.status(500).json({
-          error: 'Invalid response from data script',
-          success: false
-        });
-      }
-    });
-
-    pythonProcess.on('error', (err) => {
-      console.error('Failed to start Python process:', err);
-      res.status(500).json({
-        error: 'Failed to start data fetch process',
-        success: false
-      });
     });
 
   } catch (error) {
     console.error('Stock data fetch error:', error);
     res.status(500).json({
-      error: 'Internal server error',
+      error: error.message || 'Failed to fetch stock data',
+      success: false
+    });
+  }
+});
+
+// Route to get stock statistics and chart data
+router.get('/statistics/:ticker', async (req, res) => {
+  try {
+    const { ticker } = req.params;
+    
+    if (!ticker) {
+      return res.status(400).json({ 
+        error: 'Ticker symbol is required',
+        success: false 
+      });
+    }
+
+    // Get real statistics from Yahoo Finance
+    const statistics = await yahooFinanceService.getStockStatistics(ticker.toUpperCase());
+    
+    res.json({
+      ...statistics,
+      success: true
+    });
+
+  } catch (error) {
+    console.error('Statistics generation error:', error);
+    res.status(500).json({
+      error: error.message || 'Internal server error',
+      success: false
+    });
+  }
+});
+
+// Route to get market overview
+router.get('/market-overview', async (req, res) => {
+  try {
+    const marketData = await yahooFinanceService.getMarketOverview();
+    res.json({
+      ...marketData,
+      success: true
+    });
+  } catch (error) {
+    console.error('Market overview error:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to fetch market overview',
+      success: false
+    });
+  }
+});
+
+// Route to search for stocks
+router.get('/search', async (req, res) => {
+  try {
+    const { query } = req.query;
+    
+    if (!query) {
+      return res.status(400).json({ 
+        error: 'Search query is required',
+        success: false 
+      });
+    }
+
+    const searchResults = await yahooFinanceService.searchStocks(query);
+    res.json({
+      ...searchResults,
+      success: true
+    });
+  } catch (error) {
+    console.error('Stock search error:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to search stocks',
+      success: false
+    });
+  }
+});
+
+// Route to get historical data
+router.get('/history/:ticker', async (req, res) => {
+  try {
+    const { ticker } = req.params;
+    const { period = '1y', interval = '1d' } = req.query;
+    
+    if (!ticker) {
+      return res.status(400).json({ 
+        error: 'Ticker symbol is required',
+        success: false 
+      });
+    }
+
+    const history = await yahooFinanceService.getHistoricalData(ticker.toUpperCase(), period, interval);
+    res.json({
+      ...history,
+      success: true
+    });
+  } catch (error) {
+    console.error('Historical data error:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to fetch historical data',
       success: false
     });
   }
