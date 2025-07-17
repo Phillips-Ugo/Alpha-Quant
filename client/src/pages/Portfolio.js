@@ -158,20 +158,24 @@ const Portfolio = () => {
     { date: 'Jun', value: 115000 },
   ];
 
-  const sectorData = portfolio.length > 0 ? [
-    { name: 'Technology', value: 45, color: '#3B82F6' },
-    { name: 'Healthcare', value: 25, color: '#10B981' },
-    { name: 'Finance', value: 20, color: '#F59E0B' },
-    { name: 'Consumer', value: 10, color: '#EF4444' },
-  ] : [
-    { name: 'No Data', value: 100, color: '#9CA3AF' }
-  ];
+  const sectorData = analytics?.sectorBreakdown ? 
+    Object.entries(analytics.sectorBreakdown).map(([sector, value], index) => {
+      const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4', '#F97316', '#84CC16'];
+      return {
+        name: sector,
+        value: Math.round((value / analytics.totalValue) * 100),
+        color: colors[index % colors.length]
+      };
+    }) : [
+      { name: 'No Data', value: 100, color: '#9CA3AF' }
+    ];
 
-  const performanceData = portfolio.map(stock => ({
-    symbol: stock.symbol,
-    performance: stock.gainLossPercentage,
-    value: stock.totalValue
-  }));
+  const performanceData = analytics?.topPerformers ? 
+    analytics.topPerformers.map(stock => ({
+      symbol: stock.symbol,
+      performance: stock.gainLossPercent,
+      value: stock.currentValue
+    })) : [];
 
   if (loading) {
     return (
@@ -184,12 +188,15 @@ const Portfolio = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center animate-fade-in">
         <div>
           <h1 className="text-3xl font-extrabold text-quant-gold font-mono drop-shadow-lg">QuantaVista Portfolio</h1>
           <p className="text-quant-green font-mono">Track and manage your investments</p>
         </div>
-        <button className="btn-quant flex items-center">
+        <button 
+          className="btn-quant flex items-center animate-scale-in"
+          onClick={() => setShowAddForm(true)}
+        >
           <PlusIcon className="h-4 w-4 mr-2" />
           Add Stock
         </button>
@@ -198,7 +205,11 @@ const Portfolio = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Example card for each stock */}
         {portfolio.map((stock, idx) => (
-          <div key={idx} className="card-quant">
+          <div 
+            key={stock.id || idx} 
+            className="card-quant animate-fade-in"
+            style={{ animationDelay: `${idx * 0.1}s` }}
+          >
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold text-quant-gold font-mono">{stock.symbol}</h2>

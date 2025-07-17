@@ -5,53 +5,66 @@ import {
   CurrencyDollarIcon,
   ChartBarIcon
 } from '@heroicons/react/24/outline';
+import axios from 'axios';
 
 const MarketStatusBar = () => {
   const [marketData, setMarketData] = useState({
-    sp500: { value: 4567.89, change: 12.34, percentChange: 0.27 },
-    nasdaq: { value: 14234.56, change: -45.67, percentChange: -0.32 },
-    dow: { value: 35678.90, change: 89.12, percentChange: 0.25 },
-    vix: { value: 18.45, change: -1.23, percentChange: -6.25 }
+    sp500: { value: 0, change: 0, percentChange: 0 },
+    nasdaq: { value: 0, change: 0, percentChange: 0 },
+    dow: { value: 0, change: 0, percentChange: 0 },
+    russell2000: { value: 0, change: 0, percentChange: 0 }
   });
 
   const [time, setTime] = useState(new Date());
   const [isMarketOpen, setIsMarketOpen] = useState(true);
   const [flashIndex, setFlashIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const fetchMarketData = async () => {
+      try {
+        const response = await axios.get('/api/stocks/market-overview');
+        if (response.data.success) {
+          const data = response.data.indices;
+          setMarketData({
+            sp500: {
+              value: data.sp500?.price || 0,
+              change: data.sp500?.change || 0,
+              percentChange: data.sp500?.changePercent || 0
+            },
+            nasdaq: {
+              value: data.nasdaq?.price || 0,
+              change: data.nasdaq?.change || 0,
+              percentChange: data.nasdaq?.changePercent || 0
+            },
+            dow: {
+              value: data.dowJones?.price || 0,
+              change: data.dowJones?.change || 0,
+              percentChange: data.dowJones?.changePercent || 0
+            },
+            russell2000: {
+              value: data.russell2000?.price || 0,
+              change: data.russell2000?.change || 0,
+              percentChange: data.russell2000?.changePercent || 0
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching market data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    // Initial fetch
+    fetchMarketData();
+
     const timer = setInterval(() => {
       setTime(new Date());
     }, 1000);
 
-    // Simulate market data updates every 3 seconds
-    const marketTimer = setInterval(() => {
-      setMarketData(prev => ({
-        sp500: {
-          ...prev.sp500,
-          value: prev.sp500.value + (Math.random() - 0.5) * 2,
-          change: prev.sp500.change + (Math.random() - 0.5) * 0.5,
-          percentChange: ((prev.sp500.value + (Math.random() - 0.5) * 2) / prev.sp500.value - 1) * 100
-        },
-        nasdaq: {
-          ...prev.nasdaq,
-          value: prev.nasdaq.value + (Math.random() - 0.5) * 5,
-          change: prev.nasdaq.change + (Math.random() - 0.5) * 1,
-          percentChange: ((prev.nasdaq.value + (Math.random() - 0.5) * 5) / prev.nasdaq.value - 1) * 100
-        },
-        dow: {
-          ...prev.dow,
-          value: prev.dow.value + (Math.random() - 0.5) * 10,
-          change: prev.dow.change + (Math.random() - 0.5) * 2,
-          percentChange: ((prev.dow.value + (Math.random() - 0.5) * 10) / prev.dow.value - 1) * 100
-        },
-        vix: {
-          ...prev.vix,
-          value: prev.vix.value + (Math.random() - 0.5) * 0.5,
-          change: prev.vix.change + (Math.random() - 0.5) * 0.1,
-          percentChange: ((prev.vix.value + (Math.random() - 0.5) * 0.5) / prev.vix.value - 1) * 100
-        }
-      }));
-    }, 3000);
+    // Update market data every 30 seconds
+    const marketTimer = setInterval(fetchMarketData, 30000);
 
     // Flash animation for market status
     const flashTimer = setInterval(() => {
@@ -151,19 +164,19 @@ const MarketStatusBar = () => {
             </div>
           </div>
 
-          {/* VIX */}
+          {/* Russell 2000 */}
           <div className="flex items-center space-x-3 group hover:bg-gray-800 px-3 py-1 rounded transition-all duration-200">
-            <span className="text-gray-400 text-xs uppercase tracking-wider">VIX</span>
+            <span className="text-gray-400 text-xs uppercase tracking-wider">RUT</span>
             <span className="text-quant-gold font-bold text-lg transition-all duration-300 group-hover:text-yellow-400">
-              {formatNumber(marketData.vix.value)}
+              {formatNumber(marketData.russell2000.value)}
             </span>
-            <div className={`flex items-center ${getChangeColor(marketData.vix.change)} transition-all duration-300`}>
-              {React.createElement(getChangeIcon(marketData.vix.change), { className: "h-4 w-4 mr-1 animate-pulse" })}
+            <div className={`flex items-center ${getChangeColor(marketData.russell2000.change)} transition-all duration-300`}>
+              {React.createElement(getChangeIcon(marketData.russell2000.change), { className: "h-4 w-4 mr-1 animate-pulse" })}
               <span className="font-bold text-sm">
-                {marketData.vix.change >= 0 ? '+' : ''}{formatNumber(marketData.vix.change)} 
+                {marketData.russell2000.change >= 0 ? '+' : ''}{formatNumber(marketData.russell2000.change)} 
               </span>
               <span className="ml-1 text-xs">
-                ({marketData.vix.percentChange >= 0 ? '+' : ''}{formatNumber(marketData.vix.percentChange)}%)
+                ({marketData.russell2000.percentChange >= 0 ? '+' : ''}{formatNumber(marketData.russell2000.percentChange)}%)
               </span>
             </div>
           </div>
