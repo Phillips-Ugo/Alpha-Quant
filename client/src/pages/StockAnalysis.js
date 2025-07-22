@@ -198,8 +198,6 @@ const StockAnalysis = () => {
             <div className="bg-quant-dark p-4 rounded-lg border border-quant-gold">
               <h3 className="text-lg font-bold text-quant-gold mb-3 font-mono">Company Information</h3>
               <div className="space-y-2 text-quant-green font-mono">
-                <div><span className="text-quant-gold">Sector:</span> {stockData.sector}</div>
-                <div><span className="text-quant-gold">Industry:</span> {stockData.industry}</div>
                 <div><span className="text-quant-gold">Market Cap:</span> {formatCurrency(stockData.marketCap)}</div>
                 <div><span className="text-quant-gold">P/E Ratio:</span> {stockData.peRatio ? stockData.peRatio.toFixed(2) : 'N/A'}</div>
                 <div><span className="text-quant-gold">Dividend Yield:</span> {stockData.dividendYield ? (stockData.dividendYield * 100).toFixed(2) + '%' : 'N/A'}</div>

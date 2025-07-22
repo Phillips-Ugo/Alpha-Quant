@@ -89,6 +89,12 @@ def make_df(ticker_symbol, period="1y"):
 def predict_stock_price(ticker_symbol, days_ahead=30):
     """Use trained LSTM model with advanced features to predict stock prices and output arrays for visualization"""
     try:
+        # Fetch current stock info for sector/industry/company_name
+        ticker = yf.Ticker(ticker_symbol)
+        info = ticker.info
+        sector = info.get('sector', 'Unknown')
+        industry = info.get('industry', 'Unknown')
+        company_name = info.get('longName', ticker_symbol)
         # Fetch data for the ticker
         period = '2y'  # Use the same period as training
         df = make_df(ticker_symbol, period)
@@ -110,15 +116,15 @@ def predict_stock_price(ticker_symbol, days_ahead=30):
             }
         
         # Engineer advanced features
-        print(f"Engineering features for {ticker_symbol}...")
+        print("Engineering features for {}...".format(ticker_symbol), file=sys.stderr)
         feature_df = engineer_features(df)
         
         # Select the most relevant features
-        print(f"Selecting features for {ticker_symbol}...")
+        print("Selecting features for {}...".format(ticker_symbol), file=sys.stderr)
         selected_df = select_features(feature_df, max_features=30)
         
         # Prepare data for LSTM
-        print(f"Preparing LSTM data for {ticker_symbol}...")
+        print("Preparing LSTM data for {}...".format(ticker_symbol), file=sys.stderr)
         X_train, X_test, y_train, y_test, scaler_X, scaler_y = prepare_lstm_data(selected_df)
         
         # Load the trained model
@@ -200,7 +206,11 @@ def predict_stock_price(ticker_symbol, days_ahead=30):
             "rolling_mean_50": rolling_mean_50,
             "rolling_mean_200": rolling_mean_200,
             "rsi": rsi,
-            "volatility": volatility
+            "volatility": volatility,
+            # Add sector, industry, and company_name
+            "sector": sector,
+            "industry": industry,
+            "company_name": company_name
         }
     except Exception as e:
         return {
@@ -230,15 +240,15 @@ def train_model(ticker_symbol, period="2y"):
             }
         
         # Engineer advanced features
-        print(f"Engineering features for {ticker_symbol}...")
+        print("Engineering features for {}...".format(ticker_symbol), file=sys.stderr)
         feature_df = engineer_features(df)
         
         # Select the most relevant features
-        print(f"Selecting features for {ticker_symbol}...")
+        print("Selecting features for {}...".format(ticker_symbol), file=sys.stderr)
         selected_df = select_features(feature_df, max_features=30)
         
         # Prepare data for LSTM
-        print(f"Preparing LSTM data for {ticker_symbol}...")
+        print("Preparing LSTM data for {}...".format(ticker_symbol), file=sys.stderr)
         X_train, X_test, y_train, y_test, scaler_X, scaler_y = prepare_lstm_data(selected_df)
         
         # Create and train model with more sophisticated architecture
@@ -274,7 +284,7 @@ def train_model(ticker_symbol, period="2y"):
         model.compile(optimizer='adam', loss='mean_squared_error', metrics=['mae'])
         
         # Train model
-        print(f"Training LSTM model for {ticker_symbol}...")
+        print(f"Training LSTM model for {ticker_symbol}...", file=sys.stderr)
         history = model.fit(
             X_train, y_train, 
             epochs=100, 

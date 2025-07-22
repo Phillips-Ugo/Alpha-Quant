@@ -15,7 +15,6 @@ const Sidebar = ({ open, onClose, appName = 'QuantaVista' }) => {
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: HomeIcon },
-    { name: 'Portfolio', href: '/portfolio', icon: ChartBarIcon },
     { name: 'AI Chat', href: '/ai-chat', icon: ChatBubbleLeftRightIcon },
     { name: 'News & Events', href: '/news', icon: NewspaperIcon },
     { name: 'Stock Analysis', href: '/stock-analysis', icon: ChartBarIcon },

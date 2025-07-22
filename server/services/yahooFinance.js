@@ -40,8 +40,9 @@ class YahooFinanceService {
       this.setCached(cacheKey, result);
       return result;
     } catch (error) {
-      console.error(`Error fetching quote for ${symbol}:`, error);
-      throw new Error(`Failed to fetch data for ${symbol}`);
+      console.error('Yahoo Finance getStockQuote error:', error);
+      // Return a user-friendly error object
+      return { error: 'Invalid or unsupported symbol', success: false };
     }
   }
 
