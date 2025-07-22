@@ -24,12 +24,19 @@ import {
 } from '@heroicons/react/24/outline';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import StockSearch from '../components/StockSearch';
 
 const Dashboard = () => {
   const [portfolio, setPortfolio] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [marketOverview, setMarketOverview] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedStock, setSelectedStock] = useState(null);
+  const [shares, setShares] = useState('');
+  const [purchasePrice, setPurchasePrice] = useState('');
+  const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     fetchDashboardData();
@@ -64,6 +71,7 @@ const Dashboard = () => {
   };
 
   const formatPercentage = (value) => {
+    if (value === undefined || value === null || isNaN(value)) return 'N/A';
     return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
   };
 
@@ -75,15 +83,46 @@ const Dashboard = () => {
     return value >= 0 ? ArrowTrendingUpIcon : ArrowTrendingDownIcon;
   };
 
-  // Mock data for charts (replace with real data)
-  const portfolioHistory = [
-    { date: 'Jan', value: 100000 },
-    { date: 'Feb', value: 105000 },
-    { date: 'Mar', value: 98000 },
-    { date: 'Apr', value: 112000 },
-    { date: 'May', value: 108000 },
-    { date: 'Jun', value: 115000 },
-  ];
+  const handleAddStock = async (e) => {
+    e.preventDefault();
+    if (!selectedStock || !shares || !purchasePrice || isNaN(shares) || isNaN(purchasePrice) || Number(shares) <= 0 || Number(purchasePrice) <= 0) {
+      toast.error('Please select a valid stock and enter valid shares and price.');
+      return;
+    }
+    setAdding(true);
+    try {
+      await axios.post('/api/portfolio/add', {
+        symbol: selectedStock.symbol,
+        shares,
+        purchasePrice,
+        purchaseDate
+      });
+      toast.success('Stock added!');
+      setShowAddModal(false);
+      setSelectedStock(null);
+      setShares('');
+      setPurchasePrice('');
+      setPurchaseDate(new Date().toISOString().split('T')[0]);
+      fetchDashboardData();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to add stock');
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  // Portfolio performance chart data
+  // Use real portfolio data if available, otherwise fallback to mock data
+  const portfolioHistory = analytics?.history && analytics.history.length > 0
+    ? analytics.history.map(item => ({ date: item.date, value: item.value }))
+    : [
+      { date: 'Jan', value: 100000 },
+      { date: 'Feb', value: 105000 },
+      { date: 'Mar', value: 98000 },
+      { date: 'Apr', value: 112000 },
+      { date: 'May', value: 108000 },
+      { date: 'Jun', value: 115000 },
+    ];
 
   const sectorData = portfolio.length > 0 ? [
     { name: 'Technology', value: 45, color: '#3B82F6' },
@@ -110,11 +149,42 @@ const Dashboard = () => {
           <h1 className="text-3xl font-extrabold text-quant-gold font-mono drop-shadow-lg">QuantaVista Dashboard</h1>
           <p className="text-quant-green font-mono">Welcome back! Here's your portfolio overview.</p>
         </div>
-        <button className="btn-quant flex items-center">
+        <button className="btn-quant flex items-center" onClick={() => setShowAddModal(true)}>
           <PlusIcon className="h-4 w-4 mr-2" />
           Add Stock
         </button>
       </div>
+      {/* Add Stock Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-md relative">
+            <button className="absolute top-2 right-2 text-gray-400 hover:text-red-500" onClick={() => setShowAddModal(false)}>&times;</button>
+            <h2 className="text-xl font-bold mb-4 text-gray-900">Add Stock to Portfolio</h2>
+            <form onSubmit={handleAddStock} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Stock</label>
+                <StockSearch onStockSelect={setSelectedStock} placeholder="Search for a stock..." />
+                {selectedStock && (
+                  <div className="mt-1 text-green-700 text-sm">Selected: {selectedStock.symbol} - {selectedStock.name}</div>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Shares</label>
+                <input type="number" min="0" step="any" className="input-field w-full" value={shares} onChange={e => setShares(e.target.value)} required />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Price</label>
+                <input type="number" min="0" step="any" className="input-field w-full" value={purchasePrice} onChange={e => setPurchasePrice(e.target.value)} required />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Date</label>
+                <input type="date" className="input-field w-full" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)} required />
+              </div>
+              <button type="submit" className="btn-quant w-full" disabled={adding}>{adding ? 'Adding...' : 'Add Stock'}</button>
+            </form>
+          </div>
+        </div>
+      )}
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="card-quant">

@@ -22,6 +22,9 @@ const authenticateToken = (req, res, next) => {
 // Persistent portfolio storage using user service
 const userService = require('../services/userService');
 
+// Add this line to declare the portfolios object
+const portfolios = {};
+
 // Get user portfolio with real-time data
 router.get('/', authenticateToken, async (req, res) => {
   try {
