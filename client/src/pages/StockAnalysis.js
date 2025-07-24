@@ -118,7 +118,7 @@ const StockAnalysis = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="card-quant">
-        <h1 className="text-3xl font-extrabold text-quant-gold mb-4 font-mono drop-shadow-lg">QuantaVista Stock Analysis</h1>
+        <h1 className="text-3xl font-extrabold text-quant-gold mb-4 font-mono drop-shadow-lg">Alpha Mind Stock Analysis</h1>
         <p className="text-quant-green font-mono mb-6">Get real-time stock data and AI-powered price predictions with advanced technical analysis</p>
         
         {/* Input Section */}

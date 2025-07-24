@@ -261,9 +261,36 @@ async function getMarketSentiment() {
       let num = parseFloat(value.replace('%', ''));
       sectorData[sector] = isNaN(num) ? 0 : num / 100;
     });
+    // Fetch latest news and determine majority sentiment
+    let overall = 'neutral';
+    let score = 0.5;
+    try {
+      const news = await getMarketNews(10);
+      const sentimentCounts = { positive: 0, negative: 0, neutral: 0 };
+      news.forEach(article => {
+        if (article.impact === 'positive') sentimentCounts.positive++;
+        else if (article.impact === 'negative') sentimentCounts.negative++;
+        else sentimentCounts.neutral++;
+      });
+      const maxCount = Math.max(sentimentCounts.positive, sentimentCounts.negative, sentimentCounts.neutral);
+      if (maxCount > 0) {
+        if (sentimentCounts.positive === maxCount) {
+          overall = 'positive';
+          score = 0.7;
+        } else if (sentimentCounts.negative === maxCount) {
+          overall = 'negative';
+          score = 0.3;
+        } else {
+          overall = 'neutral';
+          score = 0.5;
+        }
+      }
+    } catch (e) {
+      // fallback to neutral
+    }
     return {
-      overall: 'neutral',
-      score: 0.5,
+      overall,
+      score,
       indicators: {
         fearGreedIndex: 52,
         volatilityIndex: 18.2
@@ -272,6 +299,20 @@ async function getMarketSentiment() {
     };
   } catch (err) {
     console.error('Alpha Vantage sector sentiment error:', err);
+    // Fallback mock sector data
+    const mockSectorData = {
+      'Technology': 0.021,
+      'Health Care': -0.012,
+      'Financials': 0.008,
+      'Consumer Discretionary': 0.015,
+      'Industrials': -0.005,
+      'Energy': 0.011,
+      'Utilities': -0.003,
+      'Real Estate': 0.004,
+      'Materials': 0.007,
+      'Consumer Staples': 0.002,
+      'Communication Services': 0.013
+    };
     return {
       overall: 'neutral',
       score: 0.5,
@@ -279,7 +320,7 @@ async function getMarketSentiment() {
         fearGreedIndex: 52,
         volatilityIndex: 18.2
       },
-      sectorData: {}
+      sectorData: mockSectorData
     };
   }
 }
@@ -316,12 +357,19 @@ async function getTrendingTopicsFromNewsAPI() {
     });
     const articles = response.data.feed || [];
     const topicCounts = {};
+    const topicSentiments = {};
     articles.forEach(article => {
       if (article.title) {
         const words = article.title.split(/\W+/).filter(w => w.length > 3);
         words.forEach(word => {
           const key = word.toLowerCase();
           topicCounts[key] = (topicCounts[key] || 0) + 1;
+          // Track sentiment for this topic
+          if (!topicSentiments[key]) topicSentiments[key] = { positive: 0, negative: 0, neutral: 0 };
+          const sentiment = (article.impact || article.sentiment || '').toLowerCase();
+          if (sentiment === 'positive') topicSentiments[key].positive++;
+          else if (sentiment === 'negative') topicSentiments[key].negative++;
+          else topicSentiments[key].neutral++;
         });
       }
     });
@@ -329,12 +377,26 @@ async function getTrendingTopicsFromNewsAPI() {
     const sortedTopics = Object.entries(topicCounts)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
-      .map(([topic, mentions]) => ({
-        topic,
-        mentions,
-        sentiment: 'unknown',
-        impact: 'unknown'
-      }));
+      .map(([topic, mentions]) => {
+        // Determine majority sentiment for this topic
+        const sentiments = topicSentiments[topic] || { positive: 0, negative: 0, neutral: 0 };
+        let sentiment = 'neutral';
+        let impact = 'low';
+        const maxCount = Math.max(sentiments.positive, sentiments.negative, sentiments.neutral);
+        if (maxCount > 0) {
+          if (sentiments.positive === maxCount) sentiment = 'positive';
+          else if (sentiments.negative === maxCount) sentiment = 'negative';
+          else sentiment = 'neutral';
+        }
+        if (mentions > 10) impact = 'high';
+        else if (mentions > 5) impact = 'medium';
+        return {
+          topic,
+          mentions,
+          sentiment,
+          impact
+        };
+      });
     return sortedTopics;
   } catch (error) {
     console.error('Trending topics Alpha Vantage error:', error);

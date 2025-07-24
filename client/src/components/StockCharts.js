@@ -319,15 +319,59 @@ const StockCharts = ({ predictionData }) => {
           </div>
           <div className="bg-quant-dark p-4 rounded-lg border border-quant-gold">
             <h4 className="text-quant-gold font-bold mb-2 font-mono">Features Used</h4>
-            <div className="text-quant-green font-mono text-sm">
+            <div className="text-quant-green font-mono text-sm mb-2">
               <p>• <span className="text-quant-gold">Total Features:</span> {predictionData.features_used}</p>
-              <p>• <span className="text-quant-gold">Top Features:</span></p>
-              <ul className="ml-4 mt-1">
-                {predictionData.top_features?.slice(0, 3).map((feature, index) => (
-                  <li key={index}>• {feature}</li>
-                ))}
-              </ul>
+              <p>• <span className="text-quant-gold">Top Features (by importance):</span></p>
             </div>
+            {/* Bar chart for top features */}
+            {Array.isArray(predictionData.top_features) && Array.isArray(predictionData.top_feature_importances) && predictionData.top_features.length > 0 && predictionData.top_feature_importances.length > 0 && (
+              <div className="h-48">
+                <Bar
+                  data={{
+                    labels: predictionData.top_features,
+                    datasets: [
+                      {
+                        label: 'Importance',
+                        data: predictionData.top_feature_importances,
+                        backgroundColor: 'rgba(255, 215, 0, 0.7)',
+                        borderColor: '#FFD700',
+                        borderWidth: 1,
+                        borderRadius: 6,
+                        barPercentage: 0.6,
+                        categoryPercentage: 0.7
+                      }
+                    ]
+                  }}
+                  options={{
+                    responsive: true,
+                    plugins: {
+                      legend: { display: false },
+                      tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.8)',
+                        titleColor: '#FFD700',
+                        bodyColor: '#00FF00',
+                        borderColor: '#FFD700',
+                        borderWidth: 1
+                      },
+                      title: {
+                        display: false
+                      }
+                    },
+                    scales: {
+                      x: {
+                        grid: { color: 'rgba(255,215,0,0.1)' },
+                        ticks: { color: '#FFD700', font: { family: 'monospace', size: 11 } }
+                      },
+                      y: {
+                        grid: { color: 'rgba(255,215,0,0.1)' },
+                        ticks: { color: '#00FF00', font: { family: 'monospace', size: 11 } },
+                        beginAtZero: true
+                      }
+                    }
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>

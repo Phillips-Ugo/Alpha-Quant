@@ -112,7 +112,7 @@ const News = () => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-extrabold text-quant-gold font-mono drop-shadow-lg">QuantaVista News & Market Events</h1>
+          <h1 className="text-3xl font-extrabold text-quant-gold font-mono drop-shadow-lg">Alpha Mind News & Market Events</h1>
           <p className="text-quant-green font-mono">Stay informed about market trends and their impact on your portfolio</p>
         </div>
       </div>

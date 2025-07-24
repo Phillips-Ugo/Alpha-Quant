@@ -193,7 +193,7 @@ const Portfolio = () => {
       {/* Header */}
       <div className="flex justify-between items-center animate-fade-in">
         <div>
-          <h1 className="text-3xl font-extrabold text-quant-gold font-mono drop-shadow-lg">QuantaVista Portfolio</h1>
+          <h1 className="text-3xl font-extrabold text-quant-gold font-mono drop-shadow-lg">Alpha Mind Portfolio</h1>
           <p className="text-quant-green font-mono">Track and manage your investments</p>
         </div>
         <button 
