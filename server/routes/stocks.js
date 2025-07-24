@@ -24,80 +24,75 @@ const authenticateToken = (req, res, next) => {
 // Route to analyze a specific stock
 router.post('/analyze', async (req, res) => {
   try {
-    const { ticker, daysAhead = 30 } = req.body;
-    
+    const { ticker, daysAhead = 30, newsText } = req.body;
     if (!ticker) {
-      return res.status(400).json({ 
-        error: 'Ticker symbol is required',
-        success: false 
-      });
+      return res.status(400).json({ error: 'Ticker symbol is required', success: false });
     }
 
-    // Path to the Python script
-    const pythonScriptPath = path.join(__dirname, '../../ml/lstm_stock_predictor.py');
-    
-    // Spawn Python process
-    const pythonProcess = spawn('python', [pythonScriptPath, ticker.toUpperCase(), daysAhead.toString()]);
-    
+    // Path to the new unified ML pipeline script
+    const pythonScriptPath = path.join(__dirname, '../../ml/lstm_pipeline.py');
+    const pythonProcess = spawn('python', [pythonScriptPath, '--predict', '--days', daysAhead.toString(), ticker.toUpperCase()]);
     let result = '';
     let error = '';
 
-    // Collect data from Python script
-    pythonProcess.stdout.on('data', (data) => {
-      result += data.toString();
-    });
+    pythonProcess.stdout.on('data', (data) => { result += data.toString(); });
+    pythonProcess.stderr.on('data', (data) => { error += data.toString(); });
 
-    pythonProcess.stderr.on('data', (data) => {
-      error += data.toString();
-    });
-
-    // Handle process completion
-    pythonProcess.on('close', (code) => {
-      if (code !== 0) {
-        console.error('Python script error:', error);
-        return res.status(500).json({
-          error: 'Failed to analyze stock',
-          details: error,
-          success: false
-        });
-      }
-
+    pythonProcess.on('close', async (code) => {
       try {
-        // Parse the JSON result from Python
-        const stockData = JSON.parse(result);
-        
-        if (!stockData.success) {
-          return res.status(400).json(stockData);
+        if (error.includes('Model not found. Train first.')) {
+          console.log('Model not found, training model for', ticker);
+          const trainProcess = spawn('python', [pythonScriptPath, '--train', '--days', daysAhead.toString(), ticker.toUpperCase()]);
+          trainProcess.on('close', (trainCode) => {
+            if (trainCode !== 0) {
+              console.error('Training failed for', ticker);
+            } else {
+              console.log('Training completed for', ticker);
+            }
+          });
+          trainProcess.on('error', (err) => { console.error('Failed to start training process:', err); });
+          return res.status(202).json({ message: 'Model is being trained. Please check back in a few minutes.', success: false, training: true });
         }
-
-        res.json({
-          ...stockData,
-          success: true
-        });
-      } catch (parseError) {
-        console.error('Error parsing Python output:', parseError);
-        res.status(500).json({
-          error: 'Invalid response from analysis script',
-          success: false
-        });
+        if (code !== 0) {
+          console.error('Python script error:', error);
+          return res.status(500).json({ error: 'Failed to analyze stock', details: error, stdout: result, success: false });
+        }
+        let stockData = null;
+        try {
+          stockData = JSON.parse(result);
+        } catch (parseError) {
+          console.error('Error parsing Python output:', parseError);
+          console.error('Python stdout:', result);
+          console.error('Python stderr:', error);
+          return res.status(500).json({ error: 'Invalid response from analysis script', parseError: parseError.message, stdout: result, stderr: error, success: false });
+        }
+        // Sentiment analysis using BERT API
+        let sentimentResult = null;
+        if (newsText) {
+          try {
+            const axios = require('axios');
+            const sentimentRes = await axios.post('http://localhost:8000/sentiment', { text: newsText });
+            sentimentResult = sentimentRes.data;
+          } catch (sentimentErr) {
+            sentimentResult = { error: 'Sentiment analysis failed', details: sentimentErr.message };
+          }
+        }
+        res.json({ ...stockData, sentiment: sentimentResult?.sentiment, sentimentScore: sentimentResult?.score, success: true });
+      } catch (err) {
+        // Catch-all for any unexpected errors in the close handler
+        console.error('Unexpected error in analysis route:', err);
+        res.status(500).json({ error: 'Unexpected backend error', details: err.message, success: false });
       }
     });
 
-    // Handle process errors
     pythonProcess.on('error', (err) => {
       console.error('Failed to start Python process:', err);
-      res.status(500).json({
-        error: 'Failed to start analysis process',
-        success: false
-      });
+      res.status(500).json({ error: 'Failed to start analysis process', details: err.message, success: false });
     });
 
   } catch (error) {
     console.error('Stock analysis error:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      success: false
-    });
+    res.status(500).json({ error: 'Internal server error', details: error.message, success: false });
   }
 });
 

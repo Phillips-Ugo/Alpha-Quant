@@ -25,6 +25,7 @@ import {
   DocumentArrowUpIcon
 } from '@heroicons/react/24/outline';
 import axios from 'axios';
+import UploadPortfolioQuickAction from '../components/UploadPortfolioQuickAction';
 import toast from 'react-hot-toast';
 
 const Portfolio = () => {
@@ -43,6 +44,12 @@ const Portfolio = () => {
   useEffect(() => {
     fetchPortfolioData();
   }, []);
+
+  // Handler for updating portfolio from RAG upload
+  const handlePortfolioUpload = () => {
+    fetchPortfolioData();
+    toast.success('Portfolio updated from uploaded file!');
+  };
 
   const fetchPortfolioData = async () => {
     try {
@@ -134,6 +141,7 @@ const Portfolio = () => {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
+
   };
 
   const formatPercentage = (value) => {
@@ -148,15 +156,10 @@ const Portfolio = () => {
     return value >= 0 ? ArrowTrendingUpIcon : ArrowTrendingDownIcon;
   };
 
-  // Mock data for charts (replace with real data)
-  const portfolioHistory = [
-    { date: 'Jan', value: 100000 },
-    { date: 'Feb', value: 105000 },
-    { date: 'Mar', value: 98000 },
-    { date: 'Apr', value: 112000 },
-    { date: 'May', value: 108000 },
-    { date: 'Jun', value: 115000 },
-  ];
+  // Portfolio history chart data: use real user portfolio history from analytics
+  const portfolioHistory = analytics?.history && analytics.history.length > 0
+    ? analytics.history.map(item => ({ date: item.date, value: item.value }))
+    : [];
 
   const sectorData = analytics?.sectorBreakdown ? 
     Object.entries(analytics.sectorBreakdown).map(([sector, value], index) => {
@@ -201,6 +204,28 @@ const Portfolio = () => {
           Add Stock
         </button>
       </div>
+
+      {/* Quick Action: Upload Portfolio */}
+      <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Upload Portfolio File (PDF/TXT)</h3>
+        <UploadPortfolioQuickAction onPortfolioUpdate={handlePortfolioUpload} />
+      </div>
+
+      {/* Portfolio Performance Chart */}
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Portfolio Performance</h3>
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart data={portfolioHistory}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="date" />
+            <YAxis />
+            <Tooltip formatter={(value) => [formatCurrency(value), 'Portfolio Value']} />
+            <Legend />
+            <Line type="monotone" dataKey="value" stroke="#3B82F6" strokeWidth={3} dot={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
       {/* Portfolio Table or Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Example card for each stock */}

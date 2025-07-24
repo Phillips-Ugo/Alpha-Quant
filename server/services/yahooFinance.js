@@ -53,22 +53,41 @@ class YahooFinanceService {
       const cached = this.getCached(cacheKey);
       if (cached) return cached;
 
-      const history = await yahooFinance.historical(symbol, {
-        period: period,
-        interval: interval
+      // Calculate period1 and period2 based on 'period' string
+      const now = new Date();
+      let period1;
+      if (period.endsWith('y')) {
+        const years = parseInt(period);
+        period1 = new Date(now.getFullYear() - years, now.getMonth(), now.getDate());
+      } else if (period.endsWith('mo')) {
+        const months = parseInt(period);
+        period1 = new Date(now.getFullYear(), now.getMonth() - months, now.getDate());
+      } else if (period.endsWith('d')) {
+        const days = parseInt(period);
+        period1 = new Date(now.getFullYear(), now.getMonth(), now.getDate() - days);
+      } else {
+        period1 = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()); // default 1y
+      }
+      const period2 = now;
+
+      const chart = await yahooFinance.chart(symbol, {
+        period1,
+        period2,
+        interval
       });
+      const history = chart.quotes || [];
 
       const result = {
         symbol: symbol,
         data: history.map(item => ({
-          date: item.date.toISOString().split('T')[0],
+          date: item.date ? new Date(item.date).toISOString().split('T')[0] : null,
           open: item.open,
           high: item.high,
           low: item.low,
           close: item.close,
           volume: item.volume,
-          adjClose: item.adjClose
-        })),
+          adjClose: item.adjclose
+        })).filter(d => d.date),
         period: period,
         interval: interval
       };

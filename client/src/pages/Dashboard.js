@@ -32,11 +32,24 @@ const Dashboard = () => {
   const [marketOverview, setMarketOverview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  // Open Add Stock modal if redirected from login
+  React.useEffect(() => {
+    const location = window.location;
+    // Use React Router location state if available
+    if (window.history && window.history.state && window.history.state.usr && window.history.state.usr.showAddStock) {
+      setShowAddModal(true);
+    }
+    // For React Router v6, use location.state
+    if (typeof window !== 'undefined' && window.location && window.location.state && window.location.state.showAddStock) {
+      setShowAddModal(true);
+    }
+  }, []);
   const [selectedStock, setSelectedStock] = useState(null);
   const [shares, setShares] = useState('');
   const [purchasePrice, setPurchasePrice] = useState('');
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
   const [adding, setAdding] = useState(false);
+
 
   useEffect(() => {
     fetchDashboardData();
@@ -44,14 +57,27 @@ const Dashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      const [portfolioRes, analyticsRes, marketRes] = await Promise.all([
-        axios.get('/api/portfolio'),
-        axios.get('/api/portfolio/analytics'),
-        axios.get('/api/stocks/market-overview')
-      ]);
+      // Fetch portfolio first
+      const portfolioRes = await axios.get('/api/portfolio');
+      const portfolioData = portfolioRes.data.portfolio || [];
+      setPortfolio(portfolioData);
 
-      setPortfolio(portfolioRes.data.portfolio || []);
+      // Build portfolio value history (example: use purchaseDate and totalValue)
+      // You may want to keep a real history in backend/db; here we mock with current value
+      const history = portfolioData.map(stock => ({
+        date: stock.purchaseDate || new Date().toISOString().split('T')[0],
+        portfolioValue: stock.totalValue || 0
+      }));
+
+      // Fetch analytics from backend (POST portfolio and history)
+      const analyticsRes = await axios.post('/api/ai/analytics', {
+        portfolio: portfolioData,
+        history
+      });
       setAnalytics(analyticsRes.data || {});
+
+      // Market overview (now from Alpha Vantage economic indicators)
+      const marketRes = await axios.get('/api/market-overview');
       setMarketOverview(marketRes.data || {});
     } catch (error) {
       console.error('Dashboard data fetch error:', error);
@@ -111,27 +137,26 @@ const Dashboard = () => {
     }
   };
 
+
   // Portfolio performance chart data
-  // Use real portfolio data if available, otherwise fallback to mock data
   const portfolioHistory = analytics?.history && analytics.history.length > 0
     ? analytics.history.map(item => ({ date: item.date, value: item.value }))
-    : [
-      { date: 'Jan', value: 100000 },
-      { date: 'Feb', value: 105000 },
-      { date: 'Mar', value: 98000 },
-      { date: 'Apr', value: 112000 },
-      { date: 'May', value: 108000 },
-      { date: 'Jun', value: 115000 },
-    ];
+    : [];
 
-  const sectorData = portfolio.length > 0 ? [
-    { name: 'Technology', value: 45, color: '#3B82F6' },
-    { name: 'Healthcare', value: 25, color: '#10B981' },
-    { name: 'Finance', value: 20, color: '#F59E0B' },
-    { name: 'Consumer', value: 10, color: '#EF4444' },
-  ] : [
-    { name: 'No Data', value: 100, color: '#9CA3AF' }
-  ];
+  // Sector allocation pie chart data from backend
+  const sectorData = analytics?.sectorBreakdown && analytics.sectorBreakdown.length > 0
+    ? analytics.sectorBreakdown.map(sector => ({
+        name: sector.sector,
+        value: sector.value,
+        color:
+          sector.sector === 'Technology' ? '#3B82F6' :
+          sector.sector === 'Healthcare' ? '#10B981' :
+          sector.sector === 'Finance' ? '#F59E0B' :
+          sector.sector === 'Consumer Discretionary' ? '#EF4444' :
+          sector.sector === 'Communication Services' ? '#6366F1' :
+          '#9CA3AF'
+      }) )
+    : [{ name: 'No Data', value: 100, color: '#9CA3AF' }];
 
   if (loading) {
     return (
@@ -370,29 +395,46 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Market Overview */}
+      {/* Market Overview - Economic Indicators */}
       {marketOverview && (
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Market Overview</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {Object.entries(marketOverview).map(([key, data]) => {
-              if (key === 'marketStatus' || key === 'lastUpdated') return null;
-              const Icon = getIconForPerformance(data.changePercent);
-              return (
-                <div key={key} className="text-center">
-                  <p className="text-sm text-gray-600">{data.name}</p>
-                  <p className="text-lg font-semibold text-gray-900">
-                    {data.currentPrice?.toLocaleString()}
-                  </p>
-                  <div className="flex items-center justify-center">
-                    <Icon className={`h-4 w-4 mr-1 ${getColorForPerformance(data.changePercent)}`} />
-                    <span className={`text-sm ${getColorForPerformance(data.changePercent)}`}>
-                      {formatPercentage(data.changePercent)}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
+        <div className="bg-gradient-to-br from-quant-dark via-white to-quant-gold rounded-xl shadow-lg p-8 transition-all duration-300">
+          <h3 className="text-2xl font-extrabold text-quant-gold mb-8 flex items-center drop-shadow-lg">
+            <ChartBarIcon className="h-7 w-7 text-quant-green mr-3" />
+            Market Overview
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            {marketOverview.interestRate && (
+              <div className="group bg-gradient-to-tr from-blue-50 to-blue-100 rounded-lg shadow-md hover:shadow-xl hover:scale-105 transition-all duration-200 flex flex-col items-center justify-center py-8 px-4 cursor-pointer relative">
+                <CurrencyDollarIcon className="h-10 w-10 text-blue-500 mb-3" />
+                <p className="text-base font-semibold text-blue-700 mb-1">Interest Rate</p>
+                <p className="text-2xl font-bold text-blue-900 mb-2">{marketOverview.interestRate.split(' ')[0]}</p>
+                <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200">{marketOverview.interestRate.replace(marketOverview.interestRate.split(' ')[0], '').trim()}</span>
+              </div>
+            )}
+            {marketOverview.inflationRate && (
+              <div className="group bg-gradient-to-tr from-yellow-50 to-yellow-100 rounded-lg shadow-md hover:shadow-xl hover:scale-105 transition-all duration-200 flex flex-col items-center justify-center py-8 px-4 cursor-pointer relative">
+                <ArrowTrendingUpIcon className="h-10 w-10 text-yellow-500 mb-3" />
+                <p className="text-base font-semibold text-yellow-700 mb-1">Inflation</p>
+                <p className="text-2xl font-bold text-yellow-900 mb-2">{marketOverview.inflationRate.split(' ')[0]}</p>
+                <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-yellow-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200">{marketOverview.inflationRate.replace(marketOverview.inflationRate.split(' ')[0], '').trim()}</span>
+              </div>
+            )}
+            {marketOverview.unemploymentRate && (
+              <div className="group bg-gradient-to-tr from-green-50 to-green-100 rounded-lg shadow-md hover:shadow-xl hover:scale-105 transition-all duration-200 flex flex-col items-center justify-center py-8 px-4 cursor-pointer relative">
+                <EyeIcon className="h-10 w-10 text-green-500 mb-3" />
+                <p className="text-base font-semibold text-green-700 mb-1">Economic Health</p>
+                <p className="text-2xl font-bold text-green-900 mb-2">{marketOverview.unemploymentRate.split(' ')[0]}</p>
+                <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-green-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200">{marketOverview.unemploymentRate.replace(marketOverview.unemploymentRate.split(' ')[0], '').trim()}</span>
+              </div>
+            )}
+            {marketOverview.gdpGrowth && (
+              <div className="group bg-gradient-to-tr from-purple-50 to-purple-100 rounded-lg shadow-md hover:shadow-xl hover:scale-105 transition-all duration-200 flex flex-col items-center justify-center py-8 px-4 cursor-pointer relative">
+                <ChartBarIcon className="h-10 w-10 text-purple-500 mb-3" />
+                <p className="text-base font-semibold text-purple-700 mb-1">GDP Proxy</p>
+                <p className="text-2xl font-bold text-purple-900 mb-2">{marketOverview.gdpGrowth.split(' ')[0]}</p>
+                <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200">{marketOverview.gdpGrowth.replace(marketOverview.gdpGrowth.split(' ')[0], '').trim()}</span>
+              </div>
+            )}
           </div>
         </div>
       )}

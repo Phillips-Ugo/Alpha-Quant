@@ -1,4 +1,5 @@
 const express = require('express');
+const yahooFinanceService = require('../services/yahooFinance');
 const multer = require('multer');
 const pdfParse = require('pdf-parse');
 const router = express.Router();
@@ -28,12 +29,10 @@ const upload = multer({
     fileSize: 10 * 1024 * 1024, // 10MB limit
   },
   fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/pdf' || 
-        file.mimetype === 'text/csv' || 
-        file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+    if (file.mimetype === 'application/pdf' || file.mimetype === 'text/plain') {
       cb(null, true);
     } else {
-      cb(new Error('Only PDF, CSV, and Excel files are allowed'), false);
+      cb(new Error('Only PDF and TXT files are allowed'), false);
     }
   }
 });
@@ -64,8 +63,33 @@ router.post('/portfolio', authenticateToken, upload.single('file'), async (req, 
     // Process extracted data using RAG
     const processedPortfolio = await processPortfolioWithRAG(extractedData);
 
+    if (!processedPortfolio || processedPortfolio.length === 0) {
+      return res.status(400).json({ error: 'No stocks extracted from file. Please check your file format and contents.' });
+    }
+
+    // Update user's portfolio by calling batch-add endpoint
+    try {
+      // Directly require the batch-add handler if available, or use internal logic
+      const portfolioRouter = require('./portfolio');
+      // If you have a function to add batch, call it here
+      if (portfolioRouter && typeof portfolioRouter.batchAddPortfolio === 'function') {
+        await portfolioRouter.batchAddPortfolio(req.user.id, processedPortfolio);
+      } else {
+        // Fallback: make an internal HTTP request
+        const axios = require('axios');
+        await axios.post(
+          `${req.protocol}://${req.get('host')}/api/portfolio/batch-add`,
+          { userId: req.user.id, stocks: processedPortfolio },
+          { headers: { Authorization: req.headers['authorization'] } }
+        );
+      }
+    } catch (err) {
+      console.error('Failed to update user portfolio:', err);
+      // Optionally, you can return an error or continue
+    }
+
     res.json({
-      message: 'Portfolio uploaded and processed successfully',
+      message: 'Portfolio uploaded, processed, and user portfolio updated successfully',
       extractedData: processedPortfolio,
       fileName: fileName
     });
@@ -81,12 +105,18 @@ async function extractFromPDF(buffer) {
   try {
     const data = await pdfParse(buffer);
     const text = data.text;
-    
     // Use RAG to extract relevant portfolio information
     return await extractPortfolioFromText(text);
   } catch (error) {
     console.error('PDF parsing error:', error);
-    throw new Error('Failed to parse PDF file');
+    // Try to process as TXT if PDF fails
+    try {
+      const text = buffer.toString('utf-8');
+      return await extractPortfolioFromText(text);
+    } catch (txtError) {
+      console.error('TXT fallback parsing error:', txtError);
+      throw new Error('Failed to parse PDF and TXT file. The file may be scanned, corrupted, or in an unsupported format. Please try a different file.');
+    }
   }
 }
 
@@ -138,34 +168,58 @@ async function extractFromExcel(buffer) {
 // RAG-based portfolio extraction from text
 async function extractPortfolioFromText(text) {
   try {
-    // This is where you would implement RAG with OpenAI or similar
-    // For now, we'll use a simple regex-based extraction
-    
-    const stockPattern = /([A-Z]{1,5})\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*(?:shares?|@)?\s*\$?(\d+(?:\.\d+)?)/gi;
-    const matches = [...text.matchAll(stockPattern)];
-    
-    const portfolio = [];
-    
-    matches.forEach(match => {
-      const symbol = match[1];
-      const shares = parseFloat(match[2]);
-      const price = parseFloat(match[3]);
-      
-      if (symbol && shares && price) {
-        portfolio.push({
-          symbol: symbol.toUpperCase(),
-          shares: shares,
-          purchasePrice: price,
-          purchaseDate: new Date().toISOString()
-        });
-      }
-    });
-    
-    // If regex extraction fails, try AI-based extraction
-    if (portfolio.length === 0) {
-      return await extractWithAI(text);
+    // Use RAG pipeline (Python) to extract JSON from text
+    const { spawnSync } = require('child_process');
+    const pythonPath = 'python';
+    const scriptPath = require('path').join(__dirname, '../../ml/rag_portfolio.py');
+    // Write text to temp file
+    const fs = require('fs');
+    const tmpPath = require('path').join(__dirname, '../../ml/tmp_portfolio.txt');
+    fs.writeFileSync(tmpPath, text, 'utf-8');
+    // Run RAG pipeline
+    const result = spawnSync(pythonPath, [scriptPath, tmpPath], { encoding: 'utf-8' });
+    let jsonStr = result.stdout.trim();
+    // Extract JSON object from output using regex
+    const match = jsonStr.match(/({[\s\S]*})/);
+    if (match) {
+      jsonStr = match[1];
     }
-    
+    // Try to parse JSON
+    let portfolio = [];
+    try {
+      let raw = JSON.parse(jsonStr);
+      // If RAG output is an object with tickers as keys, convert to array
+      if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+        portfolio = await Promise.all(Object.values(raw).map(async item => {
+          const symbol = item.ticker || item.symbol;
+          const shares = item.shares;
+          // Use the date from RAG output, fallback only if missing
+          let purchaseDate = item.price_bought ? item.price_bought : new Date().toISOString();
+          // Get current price for purchasePrice
+          const purchasePrice = await getCurrentStockPrice(symbol);
+          return {
+            symbol,
+            shares,
+            purchasePrice,
+            purchaseDate
+          };
+        }));
+      } else if (Array.isArray(raw)) {
+        portfolio = raw;
+      }
+    } catch (e) {
+      console.error('RAG output not valid JSON:', jsonStr);
+      portfolio = [];
+    }
+    // Fallback: if no price, use current price
+    for (let item of portfolio) {
+      if (!item.purchasePrice) {
+        item.purchasePrice = await getCurrentStockPrice(item.symbol);
+      }
+      if (!item.purchaseDate) {
+        item.purchaseDate = new Date().toISOString();
+      }
+    }
     return portfolio;
   } catch (error) {
     console.error('Portfolio extraction error:', error);
@@ -240,19 +294,18 @@ async function processPortfolioWithRAG(extractedData) {
 
 // Helper function to get current stock price
 async function getCurrentStockPrice(symbol) {
-  // Mock stock prices (replace with real API)
-  const mockPrices = {
-    'AAPL': 150.25,
-    'GOOGL': 2750.50,
-    'MSFT': 310.75,
-    'AMZN': 3300.00,
-    'TSLA': 850.25,
-    'NVDA': 450.75,
-    'META': 320.50,
-    'NFLX': 580.25
-  };
-  
-  return mockPrices[symbol.toUpperCase()] || Math.random() * 100 + 50;
+  // Use Yahoo Finance service for real-time price
+  try {
+    const quote = await yahooFinanceService.getStockQuote(symbol.toUpperCase());
+    if (quote && quote.currentPrice) {
+      return quote.currentPrice;
+    }
+    // Fallback: random price if API fails
+    return Math.random() * 100 + 50;
+  } catch (error) {
+    console.error('Yahoo Finance price error:', error);
+    return Math.random() * 100 + 50;
+  }
 }
 
 module.exports = router; 

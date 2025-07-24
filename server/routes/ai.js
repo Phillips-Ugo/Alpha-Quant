@@ -105,18 +105,37 @@ router.delete('/chat', authenticateToken, (req, res) => {
 // Generate AI response
 async function generateAIResponse(message, portfolioContext, chatHistory) {
   try {
-    // In a real implementation, you would use OpenAI's API
-    // const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    
-    // Prepare context for the AI
+    // Use OpenAI API for real responses
+    const apiKey = process.env.OPENAI_API_KEY;
     const context = buildContext(portfolioContext, chatHistory);
-    
-    // Mock AI response based on message content
-    const response = await generateMockResponse(message, context);
-    
-    return response;
+
+    // Prepare messages for OpenAI Chat API
+    const messages = [
+      { role: 'system', content: context },
+      ...chatHistory.map(msg => ({ role: msg.role, content: msg.content })),
+      { role: 'user', content: message }
+    ];
+
+    const response = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: 'gpt-3.5-turbo',
+        messages,
+        max_tokens: 200,
+        temperature: 0.7
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const aiText = response.data.choices?.[0]?.message?.content || "I'm sorry, I couldn't generate a response.";
+    return aiText;
   } catch (error) {
-    console.error('AI response generation error:', error);
+    console.error('AI response generation error:', error?.response?.data || error);
     return "I'm sorry, I'm having trouble processing your request right now. Please try again later.";
   }
 }
@@ -324,4 +343,59 @@ function calculateVolatility(portfolio) {
   return Math.random() * 30 + 5; // 5-35% range
 }
 
-module.exports = router; 
+// Portfolio analytics endpoint
+router.post('/analytics', authenticateToken, async (req, res) => {
+  try {
+    const { portfolio, history } = req.body;
+    if (!portfolio || !Array.isArray(portfolio)) {
+      return res.status(400).json({ error: 'Portfolio data is required' });
+    }
+
+    // Sector breakdown
+    const sectors = {};
+    let sectorTotalValue = 0;
+    portfolio.forEach(stock => {
+      const sector = getStockSector(stock.symbol);
+      sectors[sector] = (sectors[sector] || 0) + stock.totalValue;
+      sectorTotalValue += stock.totalValue;
+    });
+    const sectorBreakdown = Object.keys(sectors).map(sector => ({
+      sector,
+      value: sectors[sector],
+      weight: (sectorTotalValue > 0 ? (sectors[sector] / sectorTotalValue) * 100 : 0)
+    }));
+
+    // Portfolio value history (expects array of {date, portfolioValue})
+    let portfolioHistory = [];
+    if (Array.isArray(history)) {
+      portfolioHistory = history.map(h => ({
+        date: h.date,
+        value: h.portfolioValue
+      }));
+    } else {
+      // fallback: single current value
+      portfolioHistory = [{ date: new Date().toISOString(), value: totalValue }];
+    }
+
+    // Calculate dashboard metrics
+    const totalValue = portfolio.reduce((sum, stock) => sum + (stock.totalValue || 0), 0);
+    const totalGainLoss = portfolio.reduce((sum, stock) => sum + (stock.gainLoss || 0), 0);
+    const totalInvested = portfolio.reduce((sum, stock) => sum + ((stock.shares || 0) * (stock.purchasePrice || 0)), 0);
+    const totalGainLossPercentage = totalInvested > 0 ? (totalGainLoss / totalInvested) * 100 : 0;
+    const totalStocks = portfolio.length;
+
+    res.json({
+      sectorBreakdown,
+      history: portfolioHistory,
+      totalValue,
+      totalGainLoss,
+      totalGainLossPercentage,
+      totalStocks
+    });
+  } catch (error) {
+    console.error('Portfolio analytics error:', error);
+    res.status(500).json({ error: 'Failed to generate analytics' });
+  }
+});
+
+module.exports = router;

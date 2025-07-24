@@ -42,6 +42,7 @@ app.use('/api/stocks', require('./routes/stocks'));
 app.use('/api/ai', require('./routes/ai'));
 app.use('/api/news', require('./routes/news'));
 app.use('/api/upload', require('./routes/upload'));
+app.use('/api', require('./routes/market'));
 
 // Socket.io connection handling
 io.on('connection', (socket) => {
