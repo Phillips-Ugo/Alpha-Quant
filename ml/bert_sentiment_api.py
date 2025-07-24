@@ -3,7 +3,7 @@ from transformers import pipeline
 import uvicorn
 
 # Path to your trained BERT model directory
-model_path = r"C:\Users\ugoch\OneDrive\Desktop\Summer Projects\FinancialAnalysis\Financial-Analysis\ml\FInBertModel"
+model_path = "C:\\Users\\ugoch\\OneDrive\\Desktop\\Summer Projects\\FinancialAnalysis\\FinBertModel"
 sentiment_pipeline = pipeline("text-classification", model=model_path, tokenizer=model_path, device=0)
 
 app = FastAPI()
