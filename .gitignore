@@ -1,2 +1,4 @@
+# Ignore FinBertModel directory and large model files
+FinBertModel/
 node_modules
 .env.local

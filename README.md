@@ -56,9 +56,6 @@ A comprehensive financial analysis web application with AI-powered insights, por
 - npm or yarn
 - Git
 
-### Setup Instructions
-
-1. **Clone the repository**
    ```bash
    git clone <repository-url>
    cd Financial-Analysis
@@ -105,6 +102,14 @@ A comprehensive financial analysis web application with AI-powered insights, por
 
 ### Environment Variables
 
+# FinBertModel Download Instructions
+
+The FinBertModel directory is not included in this repository due to GitHub's file size limits. Please download the model from the provided cloud storage link and place it in the project root directory:
+
+1. Download FinBertModel from: [YOUR_CLOUD_LINK_HERE]
+2. Place the folder at: `C:/Users/ugoch/OneDrive/Desktop/Summer Projects/FinancialAnalysis/FinBertModel`
+
+Update the link above with your actual cloud storage URL.
 Create a `.env` file in the root directory with the following variables:
 
 ```env
