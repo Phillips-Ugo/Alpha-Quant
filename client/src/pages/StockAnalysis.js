@@ -258,7 +258,23 @@ const StockAnalysis = () => {
               </div>
             </div>
           </div>
-          
+
+          {/* Sentiment Analysis Result */}
+          {prediction.sentiment && (
+            <div className="mt-6 p-4 bg-quant-dark rounded-lg border border-quant-gold">
+              <h3 className="text-lg font-bold text-quant-gold mb-2 font-mono flex items-center gap-2">
+                <ChartPieIcon className="h-5 w-5" />
+                Sentiment Analysis (BERT)
+              </h3>
+              <div className="text-quant-green font-mono text-lg">
+                Sentiment: <span className="font-bold text-quant-gold">{prediction.sentiment}</span>
+                {prediction.sentimentScore && (
+                  <span className="ml-4 text-xs text-quant-green">Confidence: {(prediction.sentimentScore * 100).toFixed(1)}%</span>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="mt-6 p-4 bg-quant-dark rounded-lg border border-quant-gold">
             <p className="text-quant-green font-mono text-sm">
               <span className="text-quant-gold font-bold">LSTM Model:</span> This prediction is generated using a Long Short-Term Memory neural network 

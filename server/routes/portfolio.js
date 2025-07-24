@@ -54,6 +54,42 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // Add stock to portfolio
+// Batch add stocks to portfolio
+router.post('/batch-add', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const stocks = req.body.stocks;
+    if (!Array.isArray(stocks) || stocks.length === 0) {
+      return res.status(400).json({ error: 'No stocks provided' });
+    }
+    if (!portfolios[userId]) portfolios[userId] = [];
+    for (const stock of stocks) {
+      if (stock.symbol && stock.shares && stock.purchasePrice) {
+        // Copy all fields from LLM object
+        const stockEntry = { ...stock };
+        // Ensure unique id for frontend editing/deletion
+        if (!stockEntry.id) {
+          stockEntry.id = Date.now().toString() + Math.floor(Math.random() * 10000);
+        }
+        // Ensure purchaseDate is set from LLM if present
+        stockEntry.purchaseDate = stock.purchaseDate || new Date().toISOString();
+        portfolios[userId].push(stockEntry);
+      }
+    }
+    // Get updated portfolio with real-time data
+    const portfolioData = await yahooFinanceService.calculatePortfolioValue(portfolios[userId]);
+    res.json({
+      message: 'Portfolio updated with batch upload',
+      portfolio: portfolioData.holdings,
+      totalValue: portfolioData.totalValue,
+      totalGainLoss: portfolioData.totalGainLoss,
+      totalGainLossPercent: portfolioData.totalGainLossPercent
+    });
+  } catch (error) {
+    console.error('Batch add error:', error);
+    res.status(500).json({ error: 'Failed to batch add stocks' });
+  }
+});
 router.post('/add', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -247,19 +283,18 @@ function calculateSectorBreakdown(portfolio) {
 }
 
 async function getCurrentStockPrice(symbol) {
-  // Mock stock price (replace with real API call)
-  const mockPrices = {
-    'AAPL': 150.25,
-    'GOOGL': 2750.50,
-    'MSFT': 310.75,
-    'AMZN': 3300.00,
-    'TSLA': 850.25,
-    'NVDA': 450.75,
-    'META': 320.50,
-    'NFLX': 580.25
-  };
-  
-  return mockPrices[symbol.toUpperCase()] || Math.random() * 100 + 50;
+  // Use Yahoo Finance service for real-time price
+  try {
+    const quote = await yahooFinanceService.getStockQuote(symbol.toUpperCase());
+    if (quote && quote.currentPrice) {
+      return quote.currentPrice;
+    }
+    // Fallback: random price if API fails
+    return Math.random() * 100 + 50;
+  } catch (error) {
+    console.error('Yahoo Finance price error:', error);
+    return Math.random() * 100 + 50;
+  }
 }
 
 function getStockSector(symbol) {

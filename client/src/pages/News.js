@@ -17,7 +17,7 @@ const News = () => {
   const [sentiment, setSentiment] = useState(null);
   const [trending, setTrending] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  // Removed category selection
   const [portfolio, setPortfolio] = useState(null);
 
   useEffect(() => {
@@ -95,18 +95,9 @@ const News = () => {
     return `${Math.floor(diffInHours / 24)}d ago`;
   };
 
-  const categories = [
-    { id: 'all', name: 'All News' },
-    { id: 'monetary-policy', name: 'Monetary Policy' },
-    { id: 'earnings', name: 'Earnings' },
-    { id: 'technology', name: 'Technology' },
-    { id: 'commodities', name: 'Commodities' },
-    { id: 'inflation', name: 'Inflation' }
-  ];
+  // Removed categories array
 
-  const filteredNews = selectedCategory === 'all' 
-    ? news 
-    : news.filter(item => item.category === selectedCategory);
+  const filteredNews = news;
 
   if (loading) {
     return (
@@ -186,21 +177,7 @@ const News = () => {
             <div className="px-6 py-4 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-gray-900">Latest News</h3>
-                <div className="flex space-x-2">
-                  {categories.map((category) => (
-                    <button
-                      key={category.id}
-                      onClick={() => setSelectedCategory(category.id)}
-                      className={`px-3 py-1 text-sm rounded-full transition-colors ${
-                        selectedCategory === category.id
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      {category.name}
-                    </button>
-                  ))}
-                </div>
+                {/* Removed category filter buttons */}
               </div>
             </div>
             <div className="divide-y divide-gray-200">
@@ -217,11 +194,20 @@ const News = () => {
                           <ClockIcon className="h-3 w-3 mr-1" />
                           {formatTimeAgo(item.publishedAt)}
                         </span>
+                        {item.impact && item.impact !== 'unknown' && (
+                          <span className={`ml-2 px-2 py-1 rounded-full text-xs font-semibold border ${getImpactColor(item.impact)}`}
+                            title={`BERT Sentiment: ${item.impact}`}>
+                            Sentiment: {item.impact.charAt(0).toUpperCase() + item.impact.slice(1)}
+                          </span>
+                        )}
                       </div>
                       <h4 className="text-lg font-semibold text-gray-900 mb-2">
                         {item.title}
                       </h4>
                       <p className="text-gray-600 mb-3">{item.summary}</p>
+                      {item.url && (
+                        <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline text-sm mb-2 block">Read full article</a>
+                      )}
                       <div className="flex items-center space-x-4 text-sm text-gray-500">
                         <span>Affected Sectors: {item.affectedSectors.join(', ')}</span>
                         <span>Stocks: {item.affectedStocks.join(', ')}</span>
@@ -265,12 +251,12 @@ const News = () => {
             </div>
           </div>
 
-          {/* Sector Performance */}
-          {sentiment && (
+          {/* Sector Performance (Alpha Vantage) */}
+          {sentiment && sentiment.sectorData && (
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Sector Sentiment</h3>
               <div className="space-y-3">
-                {Object.entries(sentiment.breakdown).map(([sector, score]) => (
+                {Object.entries(sentiment.sectorData).map(([sector, score]) => (
                   <div key={sector} className="flex items-center justify-between">
                     <span className="text-sm font-medium text-gray-900 capitalize">
                       {sector}
@@ -288,42 +274,6 @@ const News = () => {
                     </div>
                   </div>
                 ))}
-              </div>
-            </div>
-          )}
-
-          {/* Market Trends */}
-          {sentiment && (
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Market Trends</h3>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Short Term</span>
-                  <span className={`text-sm font-medium capitalize ${
-                    sentiment.trends.shortTerm === 'bullish' ? 'text-green-600' : 
-                    sentiment.trends.shortTerm === 'bearish' ? 'text-red-600' : 'text-gray-600'
-                  }`}>
-                    {sentiment.trends.shortTerm}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Medium Term</span>
-                  <span className={`text-sm font-medium capitalize ${
-                    sentiment.trends.mediumTerm === 'bullish' ? 'text-green-600' : 
-                    sentiment.trends.mediumTerm === 'bearish' ? 'text-red-600' : 'text-gray-600'
-                  }`}>
-                    {sentiment.trends.mediumTerm}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Long Term</span>
-                  <span className={`text-sm font-medium capitalize ${
-                    sentiment.trends.longTerm === 'bullish' ? 'text-green-600' : 
-                    sentiment.trends.longTerm === 'bearish' ? 'text-red-600' : 'text-gray-600'
-                  }`}>
-                    {sentiment.trends.longTerm}
-                  </span>
-                </div>
               </div>
             </div>
           )}

@@ -249,59 +249,6 @@ const AIChat = () => {
           </div>
         </div>
 
-        {/* Sidebar - Portfolio Context */}
-        {portfolio && (
-          <div className="w-80 bg-gray-50 border-l border-gray-200 p-6 overflow-y-auto">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Portfolio Context</h3>
-            
-            <div className="space-y-4">
-              <div className="bg-white rounded-lg p-4">
-                <h4 className="font-medium text-gray-900 mb-2">Total Value</h4>
-                <p className="text-2xl font-bold text-gray-900">
-                  ${portfolio.totalValue?.toLocaleString() || '0'}
-                </p>
-              </div>
-
-              <div className="bg-white rounded-lg p-4">
-                <h4 className="font-medium text-gray-900 mb-2">Holdings</h4>
-                <div className="space-y-2">
-                  {portfolio.portfolio?.slice(0, 5).map((stock) => (
-                    <div key={stock.id} className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-gray-900">
-                        {stock.symbol}
-                      </span>
-                      <span className={`text-sm ${
-                        stock.gainLossPercentage >= 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {stock.gainLossPercentage >= 0 ? '+' : ''}{stock.gainLossPercentage.toFixed(2)}%
-                      </span>
-                    </div>
-                  ))}
-                  {portfolio.portfolio?.length > 5 && (
-                    <p className="text-xs text-gray-500">
-                      +{portfolio.portfolio.length - 5} more holdings
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="bg-white rounded-lg p-4">
-                <h4 className="font-medium text-gray-900 mb-2">Quick Actions</h4>
-                <div className="space-y-2">
-                  <button className="w-full text-left text-sm text-blue-600 hover:text-blue-700 py-1">
-                    Analyze portfolio risk
-                  </button>
-                  <button className="w-full text-left text-sm text-blue-600 hover:text-blue-700 py-1">
-                    Get diversification tips
-                  </button>
-                  <button className="w-full text-left text-sm text-blue-600 hover:text-blue-700 py-1">
-                    Review performance
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

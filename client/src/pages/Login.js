@@ -27,7 +27,8 @@ const Login = () => {
     try {
       const result = await login(formData.email, formData.password, rememberMe);
       if (result.success) {
-        navigate('/');
+        // Redirect to dashboard and open Add Stock modal
+        navigate('/', { state: { showAddStock: true } });
       }
     } catch (error) {
       console.error('Login error:', error);

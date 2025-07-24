@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import UploadPortfolioQuickAction from './UploadPortfolioQuickAction';
 import { 
   XMarkIcon,
   HomeIcon,
@@ -95,14 +96,7 @@ const Sidebar = ({ open, onClose, appName = 'QuantaVista' }) => {
             Quick Actions
           </h3>
           <div className="space-y-2">
-            <button className="group flex items-center w-full px-3 py-2 text-sm font-bold text-yellow-200 rounded-md hover:bg-gray-800 hover:text-green-400 transition-colors duration-200 font-mono">
-              <PlusIcon className="mr-3 h-5 w-5 text-yellow-400 group-hover:text-green-400" />
-              Add Stock
-            </button>
-            <button className="group flex items-center w-full px-3 py-2 text-sm font-bold text-yellow-200 rounded-md hover:bg-gray-800 hover:text-green-400 transition-colors duration-200 font-mono">
-              <DocumentArrowUpIcon className="mr-3 h-5 w-5 text-yellow-400 group-hover:text-green-400" />
-              Upload Portfolio
-            </button>
+            <UploadPortfolioQuickAction />
           </div>
         </div>
         {/* Footer */}

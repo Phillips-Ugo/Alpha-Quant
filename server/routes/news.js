@@ -21,10 +21,7 @@ const authenticateToken = (req, res, next) => {
 // Get market news and events
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { category = 'all', limit = 10 } = req.query;
-    
-    const news = await getMarketNews(category, parseInt(limit));
-    
+    const news = await getMarketNews(10);
     res.json({
       news: news,
       timestamp: new Date().toISOString()
@@ -97,77 +94,55 @@ router.get('/sentiment', authenticateToken, async (req, res) => {
 
 // Get market news
 async function getMarketNews(category, limit) {
-  // Mock news data (replace with real news API)
-  const mockNews = [
-    {
-      id: 1,
-      title: "Federal Reserve Signals Potential Rate Hike in Next Meeting",
-      summary: "The Federal Reserve has indicated a possible interest rate increase in the upcoming meeting, which could impact technology stocks and growth companies.",
-      category: "monetary-policy",
-      impact: "negative",
-      affectedSectors: ["Technology", "Growth Stocks"],
-      affectedStocks: ["AAPL", "GOOGL", "MSFT", "TSLA"],
-      publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      source: "Financial Times",
-      url: "#"
-    },
-    {
-      id: 2,
-      title: "Tech Giants Report Strong Q3 Earnings",
-      summary: "Major technology companies have reported better-than-expected quarterly earnings, driving market optimism.",
-      category: "earnings",
-      impact: "positive",
-      affectedSectors: ["Technology"],
-      affectedStocks: ["AAPL", "GOOGL", "MSFT", "META"],
-      publishedAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-      source: "Reuters",
-      url: "#"
-    },
-    {
-      id: 3,
-      title: "Oil Prices Surge on Supply Concerns",
-      summary: "Oil prices have reached new highs due to supply chain disruptions and geopolitical tensions.",
-      category: "commodities",
-      impact: "mixed",
-      affectedSectors: ["Energy", "Transportation"],
-      affectedStocks: ["XOM", "CVX", "DAL", "UAL"],
-      publishedAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-      source: "Bloomberg",
-      url: "#"
-    },
-    {
-      id: 4,
-      title: "Inflation Data Shows Cooling Trend",
-      summary: "Latest inflation figures indicate a cooling trend, which could support consumer spending and retail stocks.",
-      category: "inflation",
-      impact: "positive",
-      affectedSectors: ["Consumer Discretionary", "Retail"],
-      affectedStocks: ["AMZN", "WMT", "TGT", "COST"],
-      publishedAt: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
-      source: "Wall Street Journal",
-      url: "#"
-    },
-    {
-      id: 5,
-      title: "AI Chip Demand Drives Semiconductor Rally",
-      summary: "Growing demand for AI chips has led to a significant rally in semiconductor stocks.",
-      category: "technology",
-      impact: "positive",
-      affectedSectors: ["Technology", "Semiconductors"],
-      affectedStocks: ["NVDA", "AMD", "INTC", "TSM"],
-      publishedAt: new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString(),
-      source: "CNBC",
-      url: "#"
-    }
-  ];
-  
-  let filteredNews = mockNews;
-  
-  if (category !== 'all') {
-    filteredNews = mockNews.filter(news => news.category === category);
+  // Fetch 10 most recent news from Alpha Vantage News & Sentiment API
+  const axios = require('axios');
+  const ALPHA_VANTAGE_API_KEY = 'F8CLK1GHMVGECNC7';
+  try {
+    const response = await axios.get('https://www.alphavantage.co/query', {
+      params: {
+        function: 'NEWS_SENTIMENT',
+        apikey: ALPHA_VANTAGE_API_KEY,
+        topics: 'financial_markets',
+        sort: 'LATEST',
+        limit: 10
+      }
+    });
+    // For each article, get BERT sentiment
+    const articles = await Promise.all(
+      (response.data.feed || []).slice(0, 10).map(async (article, idx) => {
+        let bertSentiment = 'unknown';
+        try {
+          const bertRes = await axios.post('http://localhost:8000/sentiment', { text: article.summary });
+          bertSentiment = bertRes.data && bertRes.data.sentiment ? String(bertRes.data.sentiment).toLowerCase() : 'unknown';
+        } catch (e) {
+          bertSentiment = 'unknown';
+        }
+        // Ensure publishedAt is a valid ISO string
+        let publishedAt = article.time_published;
+        if (publishedAt && !isNaN(Date.parse(publishedAt))) {
+          publishedAt = new Date(publishedAt).toISOString();
+        } else {
+          publishedAt = new Date().toISOString();
+        }
+        return {
+          id: idx + 1,
+          title: article.title,
+          summary: article.summary,
+          category: 'latest',
+          impact: bertSentiment,
+          affectedSectors: article.sector ? [article.sector] : [],
+          affectedStocks: article.ticker_sentiment ? article.ticker_sentiment.map(t => t.ticker) : [],
+          publishedAt,
+          source: article.source,
+          url: article.url
+        };
+      })
+    );
+    return articles;
+  } catch (err) {
+    console.error('Alpha Vantage news fetch error:', err);
+    return [];
   }
-  
-  return filteredNews.slice(0, limit);
 }
 
 // Get news impact on specific stock
@@ -268,37 +243,51 @@ async function generateRecommendations(portfolio) {
 
 // Get market sentiment
 async function getMarketSentiment() {
-  // Mock sentiment data (replace with real sentiment analysis)
-  const sentiment = {
-    overall: "neutral",
-    score: 0.52, // 0-1 scale
-    breakdown: {
-      technology: 0.65,
-      healthcare: 0.45,
-      financial: 0.38,
-      consumer: 0.58,
-      energy: 0.72
-    },
-    indicators: {
-      fearGreedIndex: 45, // 0-100
-      volatilityIndex: 22.5,
-      marketMomentum: "slightly_bullish"
-    },
-    trends: {
-      shortTerm: "neutral",
-      mediumTerm: "bullish",
-      longTerm: "bullish"
-    }
-  };
-  
-  return sentiment;
+  // Fetch Alpha Vantage sector performance data
+  const axios = require('axios');
+  const ALPHA_VANTAGE_API_KEY = 'F8CLK1GHMVGECNC7';
+  try {
+    const response = await axios.get('https://www.alphavantage.co/query', {
+      params: {
+        function: 'SECTOR',
+        apikey: ALPHA_VANTAGE_API_KEY
+      }
+    });
+    // Use "Rank A: Real-Time Performance" as sector sentiment
+    const sectorPerf = response.data["Rank A: Real-Time Performance"] || {};
+    // Normalize sector data to percent (e.g., +2.34% => 0.0234)
+    const sectorData = {};
+    Object.entries(sectorPerf).forEach(([sector, value]) => {
+      let num = parseFloat(value.replace('%', ''));
+      sectorData[sector] = isNaN(num) ? 0 : num / 100;
+    });
+    return {
+      overall: 'neutral',
+      score: 0.5,
+      indicators: {
+        fearGreedIndex: 52,
+        volatilityIndex: 18.2
+      },
+      sectorData
+    };
+  } catch (err) {
+    console.error('Alpha Vantage sector sentiment error:', err);
+    return {
+      overall: 'neutral',
+      score: 0.5,
+      indicators: {
+        fearGreedIndex: 52,
+        volatilityIndex: 18.2
+      },
+      sectorData: {}
+    };
+  }
 }
 
 // Get trending topics
 router.get('/trending', authenticateToken, async (req, res) => {
   try {
-    const trending = await getTrendingTopics();
-    
+    const trending = await getTrendingTopicsFromNewsAPI();
     res.json({
       trending: trending,
       timestamp: new Date().toISOString()
@@ -310,39 +299,47 @@ router.get('/trending', authenticateToken, async (req, res) => {
 });
 
 // Get trending topics
-async function getTrendingTopics() {
-  return [
-    {
-      topic: "Federal Reserve Policy",
-      mentions: 1250,
-      sentiment: "negative",
-      impact: "high"
-    },
-    {
-      topic: "AI Technology",
-      mentions: 890,
-      sentiment: "positive",
-      impact: "high"
-    },
-    {
-      topic: "Earnings Season",
-      mentions: 650,
-      sentiment: "positive",
-      impact: "medium"
-    },
-    {
-      topic: "Oil Prices",
-      mentions: 420,
-      sentiment: "mixed",
-      impact: "medium"
-    },
-    {
-      topic: "Inflation Data",
-      mentions: 380,
-      sentiment: "positive",
-      impact: "high"
-    }
-  ];
+// Get trending topics from NewsAPI
+async function getTrendingTopicsFromNewsAPI() {
+  // Fetch trending topics from Alpha Vantage News & Sentiment API
+  const axios = require('axios');
+  const ALPHA_VANTAGE_API_KEY = 'F8CLK1GHMVGECNC7';
+  try {
+    const response = await axios.get('https://www.alphavantage.co/query', {
+      params: {
+        function: 'NEWS_SENTIMENT',
+        apikey: ALPHA_VANTAGE_API_KEY,
+        topics: 'financial_markets',
+        sort: 'LATEST',
+        limit: 50
+      }
+    });
+    const articles = response.data.feed || [];
+    const topicCounts = {};
+    articles.forEach(article => {
+      if (article.title) {
+        const words = article.title.split(/\W+/).filter(w => w.length > 3);
+        words.forEach(word => {
+          const key = word.toLowerCase();
+          topicCounts[key] = (topicCounts[key] || 0) + 1;
+        });
+      }
+    });
+    // Get top 5 trending topics
+    const sortedTopics = Object.entries(topicCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([topic, mentions]) => ({
+        topic,
+        mentions,
+        sentiment: 'unknown',
+        impact: 'unknown'
+      }));
+    return sortedTopics;
+  } catch (error) {
+    console.error('Trending topics Alpha Vantage error:', error);
+    return [];
+  }
 }
 
-module.exports = router; 
+module.exports = router;
