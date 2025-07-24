@@ -4,6 +4,7 @@ const multer = require('multer');
 const pdfParse = require('pdf-parse');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
+
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -37,7 +38,7 @@ const upload = multer({
   }
 });
 
-// Upload portfolio file
+// Upload portfolio file - UPDATED WITH BETTER ERROR HANDLING
 router.post('/portfolio', authenticateToken, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
@@ -50,8 +51,14 @@ router.post('/portfolio', authenticateToken, upload.single('file'), async (req, 
 
     let extractedData;
 
+    console.log(`Processing file: ${fileName}, type: ${fileType}`);
+
     if (fileType === 'application/pdf') {
       extractedData = await extractFromPDF(fileBuffer);
+    } else if (fileType === 'text/plain') {
+      // Handle plain text files
+      const text = fileBuffer.toString('utf-8');
+      extractedData = await extractPortfolioFromText(text);
     } else if (fileType === 'text/csv') {
       extractedData = await extractFromCSV(fileBuffer);
     } else if (fileType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
@@ -60,12 +67,26 @@ router.post('/portfolio', authenticateToken, upload.single('file'), async (req, 
       return res.status(400).json({ error: 'Unsupported file type' });
     }
 
+    console.log('Extracted data:', extractedData);
+
+    if (!extractedData || extractedData.length === 0) {
+      return res.status(400).json({ 
+        error: 'No stocks extracted from file. Please check your file format and contents.',
+        details: 'The file may not contain recognizable portfolio data or the format may not be supported.'
+      });
+    }
+
     // Process extracted data using RAG
     const processedPortfolio = await processPortfolioWithRAG(extractedData);
 
     if (!processedPortfolio || processedPortfolio.length === 0) {
-      return res.status(400).json({ error: 'No stocks extracted from file. Please check your file format and contents.' });
+      return res.status(400).json({ 
+        error: 'No valid stocks found after processing.',
+        details: 'The extracted data did not contain valid stock information.'
+      });
     }
+
+    console.log('Processed portfolio:', processedPortfolio);
 
     // Update user's portfolio by calling batch-add endpoint
     try {
@@ -85,18 +106,25 @@ router.post('/portfolio', authenticateToken, upload.single('file'), async (req, 
       }
     } catch (err) {
       console.error('Failed to update user portfolio:', err);
-      // Optionally, you can return an error or continue
+      return res.status(500).json({ 
+        error: 'Portfolio processed successfully but failed to update database',
+        details: err.message
+      });
     }
 
     res.json({
       message: 'Portfolio uploaded, processed, and user portfolio updated successfully',
       extractedData: processedPortfolio,
-      fileName: fileName
+      fileName: fileName,
+      stocksFound: processedPortfolio.length
     });
 
   } catch (error) {
     console.error('File upload error:', error);
-    res.status(500).json({ error: 'Failed to process uploaded file' });
+    res.status(500).json({ 
+      error: 'Failed to process uploaded file',
+      details: error.message
+    });
   }
 });
 
@@ -149,119 +177,220 @@ async function extractFromCSV(buffer) {
   }
 }
 
-// Extract data from Excel (mock implementation)
+// Extract data from Excel (real implementation using xlsx library)
 async function extractFromExcel(buffer) {
   try {
-    // In a real implementation, you would use a library like 'xlsx'
-    // For now, we'll return mock data
-    return [
-      { symbol: 'AAPL', shares: '100', price: '150.25' },
-      { symbol: 'GOOGL', shares: '50', price: '2750.50' },
-      { symbol: 'MSFT', shares: '75', price: '310.75' }
-    ];
+    const XLSX = require('xlsx');
+    
+    // Parse the Excel file
+    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    
+    // Get the first worksheet
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    
+    // Convert to JSON
+    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+    
+    console.log('Excel data parsed:', jsonData);
+    
+    // Process and standardize the data
+    const portfolio = [];
+    
+    for (const row of jsonData) {
+      // Try to identify columns by common names (case-insensitive)
+      const keys = Object.keys(row).map(k => k.toLowerCase());
+      
+      let symbol, shares, price, date;
+      
+      // Find symbol/ticker column
+      const symbolKeys = keys.filter(k => 
+        k.includes('symbol') || k.includes('ticker') || k.includes('stock')
+      );
+      if (symbolKeys.length > 0) {
+        symbol = row[Object.keys(row).find(k => k.toLowerCase() === symbolKeys[0])];
+      }
+      
+      // Find shares column
+      const shareKeys = keys.filter(k => 
+        k.includes('shares') || k.includes('quantity') || k.includes('qty')
+      );
+      if (shareKeys.length > 0) {
+        shares = row[Object.keys(row).find(k => k.toLowerCase() === shareKeys[0])];
+      }
+      
+      // Find price column
+      const priceKeys = keys.filter(k => 
+        k.includes('price') || k.includes('cost') || k.includes('value')
+      );
+      if (priceKeys.length > 0) {
+        price = row[Object.keys(row).find(k => k.toLowerCase() === priceKeys[0])];
+      }
+      
+      // Find date column
+      const dateKeys = keys.filter(k => 
+        k.includes('date') || k.includes('purchased') || k.includes('bought')
+      );
+      if (dateKeys.length > 0) {
+        date = row[Object.keys(row).find(k => k.toLowerCase() === dateKeys[0])];
+      }
+      
+      // If we couldn't find columns by name, try positional (first few columns)
+      if (!symbol && !shares && !price) {
+        const values = Object.values(row);
+        if (values.length >= 2) {
+          symbol = values[0]; // First column as symbol
+          shares = values[1]; // Second column as shares
+          price = values[2] || 0; // Third column as price (optional)
+          date = values[3]; // Fourth column as date (optional)
+        }
+      }
+      
+      // Add to portfolio if we have minimum required data
+      if (symbol && shares) {
+        portfolio.push({
+          symbol: String(symbol).toUpperCase(),
+          shares: String(shares),
+          price: String(price || 0),
+          purchaseDate: date ? new Date(date).toISOString() : new Date().toISOString()
+        });
+      }
+    }
+    
+    console.log('Processed Excel portfolio:', portfolio);
+    return portfolio;
+    
   } catch (error) {
     console.error('Excel parsing error:', error);
-    throw new Error('Failed to parse Excel file');
+    throw new Error('Failed to parse Excel file. Please ensure it contains columns for Symbol, Shares, and optionally Price and Date.');
   }
 }
 
-// RAG-based portfolio extraction from text
+// COMPLETELY REWRITTEN - RAG-based portfolio extraction from text
 async function extractPortfolioFromText(text) {
   try {
     // Use RAG pipeline (Python) to extract JSON from text
     const { spawnSync } = require('child_process');
     const pythonPath = 'python';
     const scriptPath = require('path').join(__dirname, '../../ml/rag_portfolio.py');
+    
     // Write text to temp file
     const fs = require('fs');
     const tmpPath = require('path').join(__dirname, '../../ml/tmp_portfolio.txt');
     fs.writeFileSync(tmpPath, text, 'utf-8');
-    // Run RAG pipeline
-    const result = spawnSync(pythonPath, [scriptPath, tmpPath], { encoding: 'utf-8' });
-    let jsonStr = result.stdout.trim();
-    // Extract JSON object from output using regex
-    const match = jsonStr.match(/({[\s\S]*})/);
-    if (match) {
-      jsonStr = match[1];
+    
+    // Run RAG pipeline with better error handling
+    const result = spawnSync(pythonPath, [scriptPath, tmpPath], { 
+      encoding: 'utf-8',
+      timeout: 30000 // 30 second timeout
+    });
+    
+    // Check for execution errors
+    if (result.error) {
+      console.error('Python script execution error:', result.error);
+      throw new Error('Failed to execute RAG pipeline');
     }
-    // Try to parse JSON
+    
+    if (result.status !== 0) {
+      console.error('Python script stderr:', result.stderr);
+      throw new Error(`RAG pipeline failed with status ${result.status}`);
+    }
+    
+    // Get the output and clean it
+    let jsonStr = result.stdout.trim();
+    
+    if (!jsonStr) {
+      console.error('No output from RAG pipeline');
+      return [];
+    }
+    
+    console.log('RAG output:', jsonStr); // Debug log
+    
+    // Parse JSON with better error handling
     let portfolio = [];
     try {
-      let raw = JSON.parse(jsonStr);
-      // If RAG output is an object with tickers as keys, convert to array
-      if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-        portfolio = await Promise.all(Object.values(raw).map(async item => {
-          const symbol = item.ticker || item.symbol;
-          const shares = item.shares;
-          // Use the date from RAG output, fallback only if missing
-          let purchaseDate = item.price_bought ? item.price_bought : new Date().toISOString();
-          // Get current price for purchasePrice
-          const purchasePrice = await getCurrentStockPrice(symbol);
-          return {
-            symbol,
-            shares,
-            purchasePrice,
-            purchaseDate
-          };
-        }));
-      } else if (Array.isArray(raw)) {
+      const raw = JSON.parse(jsonStr);
+      
+      // Check if it's an error response from Python
+      if (raw.error) {
+        console.error('RAG pipeline error:', raw.error);
+        return [];
+      }
+      
+      // Handle different response formats
+      if (Array.isArray(raw)) {
         portfolio = raw;
+      } else if (raw && typeof raw === 'object') {
+        // If RAG output is an object with tickers as keys, convert to array
+        if (Object.keys(raw).length > 0 && Object.values(raw)[0].ticker) {
+          portfolio = Object.values(raw);
+        } else {
+          // Single object, convert to array
+          portfolio = [raw];
+        }
       }
-    } catch (e) {
-      console.error('RAG output not valid JSON:', jsonStr);
-      portfolio = [];
+      
+      // Process and validate each item
+      const processedPortfolio = [];
+      for (const item of portfolio) {
+        if (item.ticker && item.shares) {
+          // Get current price if purchasePrice is 0 or missing
+          let purchasePrice = parseFloat(item.purchasePrice) || 0;
+          if (purchasePrice === 0) {
+            purchasePrice = await getCurrentStockPrice(item.ticker);
+          }
+          
+          processedPortfolio.push({
+            symbol: item.ticker.toUpperCase(),
+            shares: parseFloat(item.shares),
+            purchasePrice: purchasePrice,
+            purchaseDate: item.purchaseDate || new Date().toISOString()
+          });
+        }
+      }
+      
+      return processedPortfolio;
+      
+    } catch (parseError) {
+      console.error('JSON parsing error:', parseError);
+      console.error('Raw output that failed to parse:', jsonStr);
+      
+      // Try to extract JSON using regex as fallback
+      const arrayMatch = jsonStr.match(/\[[\s\S]*?\]/);
+      const objectMatch = jsonStr.match(/\{[\s\S]*?\}/);
+      
+      if (arrayMatch) {
+        try {
+          const extracted = JSON.parse(arrayMatch[0]);
+          return Array.isArray(extracted) ? extracted : [extracted];
+        } catch (regexParseError) {
+          console.error('Array regex extraction failed:', regexParseError);
+        }
+      } else if (objectMatch) {
+        try {
+          const extracted = JSON.parse(objectMatch[0]);
+          return [extracted];
+        } catch (regexParseError) {
+          console.error('Object regex extraction failed:', regexParseError);
+        }
+      }
+      
+      // Final fallback - return empty array
+      console.error('All JSON parsing attempts failed');
+      return [];
     }
-    // Fallback: if no price, use current price
-    for (let item of portfolio) {
-      if (!item.purchasePrice) {
-        item.purchasePrice = await getCurrentStockPrice(item.symbol);
-      }
-      if (!item.purchaseDate) {
-        item.purchaseDate = new Date().toISOString();
-      }
-    }
-    return portfolio;
+    
   } catch (error) {
     console.error('Portfolio extraction error:', error);
-    throw new Error('Failed to extract portfolio data');
+    throw new Error('Failed to extract portfolio data from text');
   }
 }
 
-// AI-based extraction using OpenAI (mock implementation)
-async function extractWithAI(text) {
-  try {
-    // In a real implementation, you would use OpenAI's API
-    // const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    
-    // const completion = await openai.chat.completions.create({
-    //   model: "gpt-4",
-    //   messages: [
-    //     {
-    //       role: "system",
-    //       content: "Extract stock portfolio information from the following text. Return only valid stock symbols, number of shares, and purchase prices in JSON format."
-    //     },
-    //     {
-    //       role: "user",
-    //       content: text
-    //     }
-    //   ]
-    // });
-    
-    // Mock AI response
-    const mockResponse = [
-      { symbol: 'AAPL', shares: 100, purchasePrice: 150.25 },
-      { symbol: 'GOOGL', shares: 50, purchasePrice: 2750.50 },
-      { symbol: 'MSFT', shares: 75, purchasePrice: 310.75 }
-    ];
-    
-    return mockResponse;
-  } catch (error) {
-    console.error('AI extraction error:', error);
-    throw new Error('Failed to extract data with AI');
-  }
-}
+// Note: This function is not used in the current implementation
+// Portfolio extraction is handled by the RAG pipeline in rag_portfolio.py
+// Keeping this function for reference or potential future use as a fallback method
 
-// Process portfolio with RAG
+// UPDATED - Process portfolio with RAG
 async function processPortfolioWithRAG(extractedData) {
   try {
     // Validate and clean extracted data
@@ -272,15 +401,18 @@ async function processPortfolioWithRAG(extractedData) {
         // Get current stock price
         const currentPrice = await getCurrentStockPrice(item.symbol);
         
+        const shares = parseFloat(item.shares);
+        const purchasePrice = parseFloat(item.purchasePrice);
+        
         processedData.push({
           symbol: item.symbol.toUpperCase(),
-          shares: parseFloat(item.shares),
-          purchasePrice: parseFloat(item.purchasePrice),
+          shares: shares,
+          purchasePrice: purchasePrice,
           purchaseDate: item.purchaseDate || new Date().toISOString(),
           currentPrice: currentPrice,
-          totalValue: parseFloat(item.shares) * currentPrice,
-          gainLoss: (currentPrice - parseFloat(item.purchasePrice)) * parseFloat(item.shares),
-          gainLossPercentage: ((currentPrice - parseFloat(item.purchasePrice)) / parseFloat(item.purchasePrice)) * 100
+          totalValue: shares * currentPrice,
+          gainLoss: (currentPrice - purchasePrice) * shares,
+          gainLossPercentage: purchasePrice > 0 ? ((currentPrice - purchasePrice) / purchasePrice) * 100 : 0
         });
       }
     }
@@ -308,4 +440,4 @@ async function getCurrentStockPrice(symbol) {
   }
 }
 
-module.exports = router; 
+module.exports = router;

@@ -153,7 +153,7 @@ const SignUp = () => {
             <div className="md:w-1/2 p-8">
               <div className="text-center mb-8">
                 <ChartBarIcon className="h-12 w-12 text-quant-green mx-auto mb-4" />
-                <h2 className="text-3xl font-extrabold text-quant-gold font-mono">Create Account - QuantaVista</h2>
+                <h2 className="text-3xl font-extrabold text-quant-gold font-mono">Create Account - Alpha Mind</h2>
                 <p className="text-quant-green font-mono mt-2">Start your financial analysis journey</p>
               </div>
 

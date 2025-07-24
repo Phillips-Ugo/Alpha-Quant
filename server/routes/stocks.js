@@ -4,6 +4,7 @@ const path = require('path');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const yahooFinanceService = require('../services/yahooFinance');
+
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -21,78 +22,232 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Route to analyze a specific stock
+// Health check endpoint - add this first
+router.get('/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    message: 'Stock API is running successfully'
+  });
+});
+
+// Route to analyze a specific stock with ML prediction
 router.post('/analyze', async (req, res) => {
+  const startTime = Date.now();
+  
   try {
     const { ticker, daysAhead = 30, newsText } = req.body;
+    
     if (!ticker) {
-      return res.status(400).json({ error: 'Ticker symbol is required', success: false });
+      return res.status(400).json({ 
+        error: 'Ticker symbol is required', 
+        success: false 
+      });
     }
 
-    // Path to the new unified ML pipeline script
+    console.log(`🔍 Starting analysis for ${ticker} (${daysAhead} days ahead)`);
+
+    // Validate Python script exists
     const pythonScriptPath = path.join(__dirname, '../../ml/lstm_pipeline.py');
-    const pythonProcess = spawn('python', [pythonScriptPath, '--predict', '--days', daysAhead.toString(), ticker.toUpperCase()]);
+    if (!require('fs').existsSync(pythonScriptPath)) {
+      console.error(`Python script not found at: ${pythonScriptPath}`);
+      return res.status(500).json({
+        error: 'ML pipeline script not found',
+        success: false,
+        details: `Expected script at: ${pythonScriptPath}`
+      });
+    }
+
+    // Spawn Python process with proper error handling
+    const pythonArgs = [
+      pythonScriptPath, 
+      '--predict', 
+      '--days', 
+      daysAhead.toString(), 
+      ticker.toUpperCase()
+    ];
+
+    console.log(`🐍 Executing: python ${pythonArgs.join(' ')}`);
+    
+    const pythonProcess = spawn('python', pythonArgs, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, PYTHONUNBUFFERED: '1' }
+    });
+    
     let result = '';
     let error = '';
+    let isProcessRunning = true;
 
-    pythonProcess.stdout.on('data', (data) => { result += data.toString(); });
-    pythonProcess.stderr.on('data', (data) => { error += data.toString(); });
+    // Set up data collectors
+    pythonProcess.stdout.on('data', (data) => { 
+      result += data.toString(); 
+    });
+    
+    pythonProcess.stderr.on('data', (data) => { 
+      error += data.toString();
+      console.log(`Python stderr: ${data.toString()}`);
+    });
 
+    // Handle process completion
     pythonProcess.on('close', async (code) => {
+      isProcessRunning = false;
+      const duration = Date.now() - startTime;
+      
       try {
-        if (error.includes('Model not found. Train first.')) {
-          console.log('Model not found, training model for', ticker);
-          const trainProcess = spawn('python', [pythonScriptPath, '--train', '--days', daysAhead.toString(), ticker.toUpperCase()]);
+        console.log(`🐍 Python process finished with code ${code} in ${duration}ms`);
+        console.log(`Python stdout length: ${result.length}`);
+        console.log(`Python stderr length: ${error.length}`);
+
+        // Check for training needed
+        if (error.includes('Model not found') || error.includes('Train first')) {
+          console.log(`🏋️ Model needs training for ${ticker}`);
+          
+          // Start training process (async)
+          const trainArgs = [
+            pythonScriptPath, 
+            '--train', 
+            '--days', 
+            daysAhead.toString(), 
+            ticker.toUpperCase()
+          ];
+          
+          const trainProcess = spawn('python', trainArgs);
           trainProcess.on('close', (trainCode) => {
-            if (trainCode !== 0) {
-              console.error('Training failed for', ticker);
-            } else {
-              console.log('Training completed for', ticker);
-            }
+            console.log(`Training process completed with code ${trainCode} for ${ticker}`);
           });
-          trainProcess.on('error', (err) => { console.error('Failed to start training process:', err); });
-          return res.status(202).json({ message: 'Model is being trained. Please check back in a few minutes.', success: false, training: true });
+          
+          return res.status(202).json({ 
+            message: 'Model is being trained. Please try again in a few minutes.', 
+            success: false, 
+            training: true,
+            ticker: ticker.toUpperCase(),
+            estimatedWaitTime: '2-3 minutes'
+          });
         }
+
+        // Check for process failure
         if (code !== 0) {
-          console.error('Python script error:', error);
-          return res.status(500).json({ error: 'Failed to analyze stock', details: error, stdout: result, success: false });
+          console.error(`❌ Python process failed with code ${code}`);
+          console.error(`Error output: ${error}`);
+          console.error(`Stdout output: ${result}`);
+          
+          return res.status(500).json({ 
+            error: 'Analysis process failed', 
+            details: error || 'Unknown Python error',
+            stdout: result,
+            exitCode: code,
+            success: false 
+          });
         }
+
+        // Parse results
+        if (!result.trim()) {
+          console.error('No output from Python script');
+          return res.status(500).json({
+            error: 'No output from analysis script',
+            stderr: error,
+            success: false
+          });
+        }
+
         let stockData = null;
         try {
-          stockData = JSON.parse(result);
+          stockData = JSON.parse(result.trim());
         } catch (parseError) {
-          console.error('Error parsing Python output:', parseError);
-          console.error('Python stdout:', result);
-          console.error('Python stderr:', error);
-          return res.status(500).json({ error: 'Invalid response from analysis script', parseError: parseError.message, stdout: result, stderr: error, success: false });
+          console.error('Failed to parse Python output:', parseError);
+          console.error('Raw output:', result);
+          
+          return res.status(500).json({ 
+            error: 'Invalid response from analysis script', 
+            parseError: parseError.message, 
+            rawOutput: result.substring(0, 500),
+            success: false 
+          });
         }
-        // Sentiment analysis using BERT API
+
+        // Check if the parsed data indicates an error
+        if (!stockData.success && stockData.error) {
+          console.error('Python script returned error:', stockData.error);
+          return res.status(400).json({
+            error: stockData.error,
+            success: false,
+            ticker: ticker.toUpperCase()
+          });
+        }
+
+        // Sentiment analysis (optional)
         let sentimentResult = null;
-        if (newsText) {
+        if (newsText && newsText.trim()) {
           try {
+            console.log('🧠 Running sentiment analysis...');
             const axios = require('axios');
-            const sentimentRes = await axios.post('http://localhost:8000/sentiment', { text: newsText });
+            const sentimentRes = await axios.post('http://localhost:8000/sentiment', { 
+              text: newsText 
+            }, { timeout: 5000 });
             sentimentResult = sentimentRes.data;
           } catch (sentimentErr) {
-            sentimentResult = { error: 'Sentiment analysis failed', details: sentimentErr.message };
+            console.warn('Sentiment analysis failed:', sentimentErr.message);
+            sentimentResult = { 
+              error: 'Sentiment analysis service unavailable'
+            };
           }
         }
-        res.json({ ...stockData, sentiment: sentimentResult?.sentiment, sentimentScore: sentimentResult?.score, success: true });
+
+        // Combine results
+        const finalResult = { 
+          ...stockData, 
+          sentiment: sentimentResult?.sentiment, 
+          sentimentScore: sentimentResult?.score,
+          processingTime: duration,
+          success: true 
+        };
+
+        console.log(`✅ Analysis completed for ${ticker} in ${duration}ms`);
+        res.json(finalResult);
+
       } catch (err) {
-        // Catch-all for any unexpected errors in the close handler
-        console.error('Unexpected error in analysis route:', err);
-        res.status(500).json({ error: 'Unexpected backend error', details: err.message, success: false });
+        console.error('❌ Unexpected error in analysis route:', err);
+        res.status(500).json({ 
+          error: 'Unexpected server error', 
+          details: err.message, 
+          success: false 
+        });
       }
     });
 
+    // Handle process errors
     pythonProcess.on('error', (err) => {
-      console.error('Failed to start Python process:', err);
-      res.status(500).json({ error: 'Failed to start analysis process', details: err.message, success: false });
+      if (isProcessRunning) {
+        isProcessRunning = false;
+        console.error('❌ Failed to start Python process:', err);
+        res.status(500).json({ 
+          error: 'Failed to start analysis process', 
+          details: err.message, 
+          success: false 
+        });
+      }
     });
 
+    // Set timeout for the process
+    setTimeout(() => {
+      if (isProcessRunning) {
+        console.warn(`⏰ Python process timeout for ${ticker}`);
+        pythonProcess.kill('SIGTERM');
+        res.status(408).json({
+          error: 'Analysis timeout',
+          message: 'The analysis is taking longer than expected. Please try again.',
+          success: false
+        });
+      }
+    }, 120000); // 2 minute timeout
+
   } catch (error) {
-    console.error('Stock analysis error:', error);
-    res.status(500).json({ error: 'Internal server error', details: error.message, success: false });
+    console.error('❌ Stock analysis error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error', 
+      details: error.message, 
+      success: false 
+    });
   }
 });
 
@@ -109,19 +264,21 @@ router.get('/data/:ticker', async (req, res) => {
       });
     }
 
-    // Get real-time stock data from Yahoo Finance
+    console.log(`📊 Fetching data for: ${ticker}`);
+
     const stockData = await yahooFinanceService.getStockQuote(ticker.toUpperCase());
 
-        res.json({
-          ...stockData,
-          success: true
+    res.json({
+      ...stockData,
+      success: true
     });
 
   } catch (error) {
     console.error('Stock data fetch error:', error);
     res.status(500).json({
-      error: error.message || 'Failed to fetch stock data',
-      success: false
+      error: error.message || 'Failed to fetch stock data',  
+      success: false,
+      ticker: req.params.ticker
     });
   }
 });
@@ -138,7 +295,8 @@ router.get('/statistics/:ticker', async (req, res) => {
       });
     }
 
-    // Get real statistics from Yahoo Finance
+    console.log(`📈 Fetching statistics for: ${ticker}`);
+
     const statistics = await yahooFinanceService.getStockStatistics(ticker.toUpperCase());
     
     res.json({
@@ -150,7 +308,8 @@ router.get('/statistics/:ticker', async (req, res) => {
     console.error('Statistics generation error:', error);
     res.status(500).json({
       error: error.message || 'Internal server error',
-      success: false
+      success: false,
+      ticker: req.params.ticker
     });
   }
 });
@@ -158,6 +317,8 @@ router.get('/statistics/:ticker', async (req, res) => {
 // Route to get market overview
 router.get('/market-overview', async (req, res) => {
   try {
+    console.log('🌍 Fetching market overview');
+    
     const marketData = await yahooFinanceService.getMarketOverview();
     res.json({
       ...marketData,
@@ -183,6 +344,15 @@ router.get('/search', async (req, res) => {
         success: false 
       });
     }
+
+    if (query.length < 1) {
+      return res.status(400).json({ 
+        error: 'Search query too short',
+        success: false 
+      });
+    }
+
+    console.log(`🔎 Searching stocks: ${query}`);
 
     const searchResults = await yahooFinanceService.searchStocks(query);
     res.json({
@@ -211,7 +381,14 @@ router.get('/history/:ticker', async (req, res) => {
       });
     }
 
-    const history = await yahooFinanceService.getHistoricalData(ticker.toUpperCase(), period, interval);
+    console.log(`📅 Fetching history for: ${ticker} (${period})`);
+
+    const history = await yahooFinanceService.getHistoricalData(
+      ticker.toUpperCase(), 
+      period, 
+      interval
+    );
+    
     res.json({
       ...history,
       success: true
@@ -221,354 +398,68 @@ router.get('/history/:ticker', async (req, res) => {
     res.status(500).json({
       error: error.message || 'Failed to fetch historical data',
       success: false
+    }); 
+  }
+});
+
+// Authenticated routes
+router.get('/quote/:symbol', authenticateToken, async (req, res) => {
+  try {
+    const { symbol } = req.params;
+    console.log(`💰 Fetching authenticated quote for: ${symbol}`);
+    
+    const quote = await yahooFinanceService.getStockQuote(symbol.toUpperCase());
+    res.json({
+      ...quote,
+      success: true
+    });
+  } catch (error) {
+    console.error('Get stock quote error:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch stock quote',
+      success: false 
     });
   }
 });
 
-// Get stock quote
-router.get('/quote/:symbol', authenticateToken, async (req, res) => {
-  try {
-    const { symbol } = req.params;
-    const quote = await getStockQuote(symbol);
-    
-    res.json(quote);
-  } catch (error) {
-    console.error('Get stock quote error:', error);
-    res.status(500).json({ error: 'Failed to fetch stock quote' });
-  }
-});
-
-// Get multiple stock quotes
 router.post('/quotes', authenticateToken, async (req, res) => {
   try {
     const { symbols } = req.body;
     
     if (!symbols || !Array.isArray(symbols)) {
-      return res.status(400).json({ error: 'Symbols array is required' });
+      return res.status(400).json({ 
+        error: 'Symbols array is required',
+        success: false 
+      });
     }
+    
+    console.log(`💰 Fetching quotes for: ${symbols.join(', ')}`);
     
     const quotes = await Promise.all(
-      symbols.map(symbol => getStockQuote(symbol))
+      symbols.map(symbol => yahooFinanceService.getStockQuote(symbol.toUpperCase()))
     );
     
-    res.json({ quotes });
+    res.json({ 
+      quotes,
+      success: true 
+    });
   } catch (error) {
     console.error('Get multiple quotes error:', error);
-    res.status(500).json({ error: 'Failed to fetch stock quotes' });
-  }
-});
-
-// Get stock historical data
-router.get('/history/:symbol', authenticateToken, async (req, res) => {
-  try {
-    const { symbol } = req.params;
-    const { period = '1y', interval = '1d' } = req.query;
-    
-    const history = await getStockHistory(symbol, period, interval);
-    
-    res.json(history);
-  } catch (error) {
-    console.error('Get stock history error:', error);
-    res.status(500).json({ error: 'Failed to fetch stock history' });
-  }
-});
-
-// Search stocks
-router.get('/search', authenticateToken, async (req, res) => {
-  try {
-    const { query } = req.query;
-    
-    if (!query || query.length < 2) {
-      return res.status(400).json({ error: 'Search query must be at least 2 characters' });
-    }
-    
-    const results = await searchStocks(query);
-    
-    res.json({ results });
-  } catch (error) {
-    console.error('Search stocks error:', error);
-    res.status(500).json({ error: 'Failed to search stocks' });
-  }
-});
-
-// Get market overview
-router.get('/market-overview', authenticateToken, async (req, res) => {
-  try {
-    const overview = await getMarketOverview();
-    
-    res.json(overview);
-  } catch (error) {
-    console.error('Get market overview error:', error);
-    res.status(500).json({ error: 'Failed to fetch market overview' });
-  }
-});
-
-// Get stock quote
-async function getStockQuote(symbol) {
-  // Mock stock data (replace with real API)
-  const mockQuotes = {
-    'AAPL': {
-      symbol: 'AAPL',
-      companyName: 'Apple Inc.',
-      currentPrice: 150.25,
-      change: 2.15,
-      changePercent: 1.45,
-      previousClose: 148.10,
-      open: 149.50,
-      high: 151.75,
-      low: 148.90,
-      volume: 45678900,
-      marketCap: 2370000000000,
-      peRatio: 25.8,
-      dividendYield: 0.65,
-      sector: 'Technology',
-      industry: 'Consumer Electronics'
-    },
-    'GOOGL': {
-      symbol: 'GOOGL',
-      companyName: 'Alphabet Inc.',
-      currentPrice: 2750.50,
-      change: -15.25,
-      changePercent: -0.55,
-      previousClose: 2765.75,
-      open: 2760.00,
-      high: 2775.25,
-      low: 2745.50,
-      volume: 1234567,
-      marketCap: 1820000000000,
-      peRatio: 28.5,
-      dividendYield: 0.0,
-      sector: 'Technology',
-      industry: 'Internet Content & Information'
-    },
-    'MSFT': {
-      symbol: 'MSFT',
-      companyName: 'Microsoft Corporation',
-      currentPrice: 310.75,
-      change: 5.25,
-      changePercent: 1.72,
-      previousClose: 305.50,
-      open: 306.00,
-      high: 312.25,
-      low: 305.75,
-      volume: 23456789,
-      marketCap: 2310000000000,
-      peRatio: 32.1,
-      dividendYield: 0.85,
-      sector: 'Technology',
-      industry: 'Software'
-    },
-    'AMZN': {
-      symbol: 'AMZN',
-      companyName: 'Amazon.com Inc.',
-      currentPrice: 3300.00,
-      change: 45.50,
-      changePercent: 1.40,
-      previousClose: 3254.50,
-      open: 3260.00,
-      high: 3310.25,
-      low: 3255.75,
-      volume: 3456789,
-      marketCap: 1650000000000,
-      peRatio: 45.2,
-      dividendYield: 0.0,
-      sector: 'Consumer Discretionary',
-      industry: 'Internet Retail'
-    },
-    'TSLA': {
-      symbol: 'TSLA',
-      companyName: 'Tesla Inc.',
-      currentPrice: 850.25,
-      change: -12.75,
-      changePercent: -1.48,
-      previousClose: 863.00,
-      open: 865.50,
-      high: 870.25,
-      low: 845.75,
-      volume: 5678901,
-      marketCap: 850000000000,
-      peRatio: 85.3,
-      dividendYield: 0.0,
-      sector: 'Consumer Discretionary',
-      industry: 'Auto Manufacturers'
-    }
-  };
-  
-  const quote = mockQuotes[symbol.toUpperCase()];
-  
-  if (!quote) {
-    // Generate mock data for unknown symbols
-    const basePrice = Math.random() * 200 + 50;
-    return {
-      symbol: symbol.toUpperCase(),
-      companyName: `${symbol.toUpperCase()} Corporation`,
-      currentPrice: basePrice,
-      change: (Math.random() - 0.5) * 10,
-      changePercent: (Math.random() - 0.5) * 5,
-      previousClose: basePrice - (Math.random() - 0.5) * 5,
-      open: basePrice - (Math.random() - 0.5) * 3,
-      high: basePrice + Math.random() * 5,
-      low: basePrice - Math.random() * 5,
-      volume: Math.floor(Math.random() * 10000000) + 1000000,
-      marketCap: Math.floor(Math.random() * 100000000000) + 10000000000,
-      peRatio: Math.random() * 50 + 10,
-      dividendYield: Math.random() * 3,
-      sector: 'Unknown',
-      industry: 'Unknown'
-    };
-  }
-  
-  return quote;
-}
-
-// Get stock historical data
-async function getStockHistory(symbol, period, interval) {
-  // Mock historical data (replace with real API)
-  const days = period === '1m' ? 30 : period === '3m' ? 90 : period === '6m' ? 180 : 365;
-  const data = [];
-  
-  const basePrice = 100 + Math.random() * 100;
-  let currentPrice = basePrice;
-  
-  for (let i = days; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    
-    // Simulate price movement
-    const change = (Math.random() - 0.5) * 2;
-    currentPrice = Math.max(currentPrice + change, 1);
-    
-    data.push({
-      date: date.toISOString().split('T')[0],
-      open: currentPrice - Math.random() * 2,
-      high: currentPrice + Math.random() * 3,
-      low: currentPrice - Math.random() * 3,
-      close: currentPrice,
-      volume: Math.floor(Math.random() * 1000000) + 100000
+    res.status(500).json({ 
+      error: 'Failed to fetch stock quotes',
+      success: false 
     });
   }
-  
-  return {
-    symbol: symbol.toUpperCase(),
-    period,
-    interval,
-    data
-  };
-}
-
-// Search stocks
-async function searchStocks(query) {
-  // Mock search results (replace with real API)
-  const allStocks = [
-    { symbol: 'AAPL', name: 'Apple Inc.' },
-    { symbol: 'GOOGL', name: 'Alphabet Inc.' },
-    { symbol: 'MSFT', name: 'Microsoft Corporation' },
-    { symbol: 'AMZN', name: 'Amazon.com Inc.' },
-    { symbol: 'TSLA', name: 'Tesla Inc.' },
-    { symbol: 'NVDA', name: 'NVIDIA Corporation' },
-    { symbol: 'META', name: 'Meta Platforms Inc.' },
-    { symbol: 'NFLX', name: 'Netflix Inc.' },
-    { symbol: 'JPM', name: 'JPMorgan Chase & Co.' },
-    { symbol: 'JNJ', name: 'Johnson & Johnson' }
-  ];
-  
-  const results = allStocks.filter(stock => 
-    stock.symbol.toLowerCase().includes(query.toLowerCase()) ||
-    stock.name.toLowerCase().includes(query.toLowerCase())
-  );
-  
-  return results.slice(0, 10); // Limit to 10 results
-}
-
-// Get market overview
-async function getMarketOverview() {
-  // Mock market data (replace with real API)
-  return {
-    sp500: {
-      symbol: '^GSPC',
-      name: 'S&P 500',
-      currentPrice: 4150.25,
-      change: 25.50,
-      changePercent: 0.62
-    },
-    nasdaq: {
-      symbol: '^IXIC',
-      name: 'NASDAQ Composite',
-      currentPrice: 12850.75,
-      change: 45.25,
-      changePercent: 0.35
-    },
-    dow: {
-      symbol: '^DJI',
-      name: 'Dow Jones Industrial Average',
-      currentPrice: 32500.50,
-      change: -15.75,
-      changePercent: -0.05
-    },
-    vix: {
-      symbol: '^VIX',
-      name: 'CBOE Volatility Index',
-      currentPrice: 22.5,
-      change: -1.25,
-      changePercent: -5.26
-    },
-    marketStatus: 'open',
-    lastUpdated: new Date().toISOString()
-  };
-}
-
-// Get stock fundamentals
-router.get('/fundamentals/:symbol', authenticateToken, async (req, res) => {
-  try {
-    const { symbol } = req.params;
-    const fundamentals = await getStockFundamentals(symbol);
-    
-    res.json(fundamentals);
-  } catch (error) {
-    console.error('Get fundamentals error:', error);
-    res.status(500).json({ error: 'Failed to fetch fundamentals' });
-  }
 });
 
-// Get stock fundamentals
-async function getStockFundamentals(symbol) {
-  // Mock fundamentals data (replace with real API)
-  return {
-    symbol: symbol.toUpperCase(),
-    companyInfo: {
-      name: `${symbol.toUpperCase()} Corporation`,
-      sector: 'Technology',
-      industry: 'Software',
-      employees: Math.floor(Math.random() * 100000) + 1000,
-      website: `https://www.${symbol.toLowerCase()}.com`
-    },
-    financialMetrics: {
-      marketCap: Math.floor(Math.random() * 1000000000000) + 10000000000,
-      enterpriseValue: Math.floor(Math.random() * 1000000000000) + 10000000000,
-      peRatio: Math.random() * 50 + 10,
-      forwardPE: Math.random() * 40 + 8,
-      pegRatio: Math.random() * 3 + 0.5,
-      priceToBook: Math.random() * 10 + 1,
-      priceToSales: Math.random() * 20 + 1,
-      dividendYield: Math.random() * 5,
-      payoutRatio: Math.random() * 100
-    },
-    growthMetrics: {
-      revenueGrowth: (Math.random() - 0.5) * 50,
-      earningsGrowth: (Math.random() - 0.5) * 60,
-      profitMargin: Math.random() * 30,
-      operatingMargin: Math.random() * 25,
-      returnOnEquity: Math.random() * 30,
-      returnOnAssets: Math.random() * 15
-    },
-    balanceSheet: {
-      totalCash: Math.floor(Math.random() * 100000000000) + 1000000000,
-      totalDebt: Math.floor(Math.random() * 50000000000) + 1000000000,
-      debtToEquity: Math.random() * 2,
-      currentRatio: Math.random() * 3 + 1,
-      quickRatio: Math.random() * 2.5 + 0.5
-    }
-  };
-}
+// Error handling middleware for this router
+router.use((err, req, res, next) => {
+  console.error('Route error:', err);
+  res.status(500).json({
+    error: 'Internal server error',
+    message: err.message,
+    success: false
+  });
+});
 
-module.exports = router; 
+module.exports = router;

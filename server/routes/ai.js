@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
+const axios = require('axios'); // Added missing axios import
+
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -102,17 +104,39 @@ router.delete('/chat', authenticateToken, (req, res) => {
   }
 });
 
-// Generate AI response
-async function generateAIResponse(message, portfolioContext, chatHistory) {
+// Generate AI response - OpenAI DIRECT VERSION
+async function generateAIResponse(message, portfolioContext, userChatHistory) {
   try {
-    // Use OpenAI API for real responses
+    // Use environment variable for API key ONLY
     const apiKey = process.env.OPENAI_API_KEY;
-    const context = buildContext(portfolioContext, chatHistory);
+    if (!apiKey) {
+      throw new Error('OpenAI API key not configured');
+    }
+
+    // Build a broad context including portfolio and chat history
+    let context = "You are a knowledgeable financial advisor AI assistant. ";
+    if (portfolioContext && portfolioContext.portfolio && portfolioContext.portfolio.length > 0) {
+      context += `The user's current portfolio includes: `;
+      portfolioContext.portfolio.forEach(stock => {
+        const gainLoss = stock.gainLoss || 0;
+        const gainLossPercent = stock.gainLossPercentage || 0;
+        context += `${stock.symbol} (${stock.shares} shares at $${stock.purchasePrice}, current: $${stock.currentPrice}, ${gainLoss >= 0 ? 'gain' : 'loss'}: ${gainLossPercent.toFixed(2)}%), `;
+      });
+      context += `Total portfolio value: $${portfolioContext.totalValue}. `;
+    } else {
+      context += `The user's portfolio is not available. `;
+    }
+    context += `\nChat history:\n`;
+    if (Array.isArray(userChatHistory) && userChatHistory.length > 1) {
+      userChatHistory.slice(-10).forEach(msg => {
+        context += `[${msg.role}] ${msg.content}\n`;
+      });
+    }
+    context += `\nProvide helpful, accurate, and educational financial advice based on the user's portfolio and questions. Keep responses concise but informative. Always remind users that this is educational information only and they should consult with a professional financial advisor for investment decisions. If asked about specific stocks, provide factual information about performance, sectors, and general market trends. Avoid giving specific buy/sell recommendations.`;
 
     // Prepare messages for OpenAI Chat API
     const messages = [
       { role: 'system', content: context },
-      ...chatHistory.map(msg => ({ role: msg.role, content: msg.content })),
       { role: 'user', content: message }
     ];
 
@@ -121,78 +145,56 @@ async function generateAIResponse(message, portfolioContext, chatHistory) {
       {
         model: 'gpt-3.5-turbo',
         messages,
-        max_tokens: 200,
+        max_tokens: 500,
         temperature: 0.7
       },
       {
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json'
-        }
+        },
+        timeout: 30000
       }
     );
 
     const aiText = response.data.choices?.[0]?.message?.content || "I'm sorry, I couldn't generate a response.";
-    return aiText;
+    return aiText.trim();
   } catch (error) {
-    console.error('AI response generation error:', error?.response?.data || error);
+    console.error('AI response generation error (OpenAI):', error?.response?.data || error.message);
+    if (error.code === 'ECONNABORTED') {
+      return "I'm sorry, the request timed out. Please try again.";
+    } else if (error.response?.status === 401) {
+      return "I'm sorry, there's an authentication issue with the AI service.";
+    } else if (error.response?.status === 429) {
+      return "I'm sorry, the AI service is currently rate limited. Please try again in a moment.";
+    }
     return "I'm sorry, I'm having trouble processing your request right now. Please try again later.";
   }
 }
 
-// Build context for AI
+// Build context for AI - ENHANCED VERSION
 function buildContext(portfolioContext, chatHistory) {
   let context = "You are a knowledgeable financial advisor AI assistant. ";
   
-  if (portfolioContext && portfolioContext.portfolio) {
+  if (portfolioContext && portfolioContext.portfolio && portfolioContext.portfolio.length > 0) {
     context += `The user's current portfolio includes: `;
     portfolioContext.portfolio.forEach(stock => {
-      context += `${stock.symbol} (${stock.shares} shares at $${stock.purchasePrice}), `;
+      const gainLoss = stock.gainLoss || 0;
+      const gainLossPercent = stock.gainLossPercentage || 0;
+      context += `${stock.symbol} (${stock.shares} shares at $${stock.purchasePrice}, current: $${stock.currentPrice}, ${gainLoss >= 0 ? 'gain' : 'loss'}: ${gainLossPercent.toFixed(2)}%), `;
     });
     context += `Total portfolio value: $${portfolioContext.totalValue}. `;
   }
   
-  context += "Provide helpful, accurate, and educational financial advice. Always remind users that you are not providing financial advice and they should consult with a professional financial advisor for investment decisions.";
+  context += `
+    Provide helpful, accurate, and educational financial advice based on the user's portfolio and questions. 
+    Keep responses concise but informative. 
+    Always remind users that this is educational information only and they should consult with a professional financial advisor for investment decisions.
+    If asked about specific stocks, provide factual information about performance, sectors, and general market trends.
+    Avoid giving specific buy/sell recommendations.
+  `;
   
-  return context;
-}
-
-// Generate mock AI response
-async function generateMockResponse(message, context) {
-  const lowerMessage = message.toLowerCase();
-  
-  // Portfolio analysis
-  if (lowerMessage.includes('portfolio') || lowerMessage.includes('holdings')) {
-    return "Based on your portfolio, I can see you have a diversified mix of technology and consumer stocks. Your portfolio shows a good balance of growth and value stocks. Remember to regularly review your asset allocation and consider rebalancing if needed.";
-  }
-  
-  // Stock recommendations
-  if (lowerMessage.includes('recommend') || lowerMessage.includes('buy') || lowerMessage.includes('sell')) {
-    return "I can't provide specific buy or sell recommendations as I'm not a licensed financial advisor. However, I can help you understand market trends and analyze company fundamentals. Consider consulting with a professional financial advisor for personalized investment advice.";
-  }
-  
-  // Market analysis
-  if (lowerMessage.includes('market') || lowerMessage.includes('trend')) {
-    return "The current market shows mixed signals with technology stocks experiencing volatility due to interest rate concerns. It's important to focus on your long-term investment goals and maintain a diversified portfolio. Market timing is extremely difficult, so consider dollar-cost averaging for new investments.";
-  }
-  
-  // Risk management
-  if (lowerMessage.includes('risk') || lowerMessage.includes('volatility')) {
-    return "Risk management is crucial for long-term investment success. Consider diversifying across different sectors, asset classes, and geographic regions. Also, ensure you have an emergency fund before investing. Remember, past performance doesn't guarantee future results.";
-  }
-  
-  // General financial advice
-  if (lowerMessage.includes('invest') || lowerMessage.includes('money')) {
-    return "Successful investing requires patience, discipline, and a long-term perspective. Start by defining your financial goals, understanding your risk tolerance, and creating a diversified portfolio. Consider low-cost index funds as a foundation for your portfolio.";
-  }
-  
-  // Technical analysis
-  if (lowerMessage.includes('technical') || lowerMessage.includes('chart')) {
-    return "Technical analysis can be a useful tool for understanding market sentiment, but it should be used in conjunction with fundamental analysis. Remember that technical indicators are not foolproof and should be part of a broader investment strategy.";
-  }
-  
-  // Default response
-  return "I'm here to help you with your financial questions! I can assist with portfolio analysis, market insights, and general financial education. What specific aspect of investing would you like to learn more about?";
+  return context.trim();
 }
 
 // Get AI insights for portfolio
@@ -240,13 +242,14 @@ function analyzeDiversification(portfolio) {
   
   portfolio.forEach(stock => {
     const sector = getStockSector(stock.symbol);
-    sectors[sector] = (sectors[sector] || 0) + stock.totalValue;
-    totalValue += stock.totalValue;
+    const stockValue = stock.totalValue || (stock.shares * stock.currentPrice) || 0;
+    sectors[sector] = (sectors[sector] || 0) + stockValue;
+    totalValue += stockValue;
   });
   
   const sectorWeights = Object.keys(sectors).map(sector => ({
     sector,
-    weight: (sectors[sector] / totalValue) * 100
+    weight: totalValue > 0 ? (sectors[sector] / totalValue) * 100 : 0
   }));
   
   const concentrationRisk = sectorWeights.some(sw => sw.weight > 30);
@@ -262,8 +265,8 @@ function analyzeDiversification(portfolio) {
 
 // Analyze portfolio risk
 function analyzeRisk(portfolio) {
-  const totalValue = portfolio.reduce((sum, stock) => sum + stock.totalValue, 0);
-  const totalGainLoss = portfolio.reduce((sum, stock) => sum + stock.gainLoss, 0);
+  const totalValue = portfolio.reduce((sum, stock) => sum + (stock.totalValue || 0), 0);
+  const totalGainLoss = portfolio.reduce((sum, stock) => sum + (stock.gainLoss || 0), 0);
   const volatility = calculateVolatility(portfolio);
   
   return {
@@ -280,14 +283,16 @@ function analyzeRisk(portfolio) {
 // Analyze portfolio performance
 function analyzePerformance(portfolio) {
   const totalInvested = portfolio.reduce((sum, stock) => sum + (stock.shares * stock.purchasePrice), 0);
-  const totalGainLoss = portfolio.reduce((sum, stock) => sum + stock.gainLoss, 0);
+  const totalGainLoss = portfolio.reduce((sum, stock) => sum + (stock.gainLoss || 0), 0);
   const performance = totalInvested > 0 ? (totalGainLoss / totalInvested) * 100 : 0;
   
   const topPerformers = portfolio
+    .filter(stock => stock.gainLossPercentage !== undefined)
     .sort((a, b) => b.gainLossPercentage - a.gainLossPercentage)
     .slice(0, 3);
   
   const underPerformers = portfolio
+    .filter(stock => stock.gainLossPercentage !== undefined)
     .sort((a, b) => a.gainLossPercentage - b.gainLossPercentage)
     .slice(0, 3);
   
@@ -314,9 +319,9 @@ function generateRecommendations(portfolio) {
     recommendations.push("Your portfolio is heavily weighted in technology. Consider adding stocks from other sectors.");
   }
   
-  const dividendStocks = portfolio.filter(stock => stock.currentPrice > 100); // Mock dividend check
-  if (dividendStocks.length < portfolio.length * 0.3) {
-    recommendations.push("Consider adding more dividend-paying stocks for income generation.");
+  const lowPerformers = portfolio.filter(stock => (stock.gainLossPercentage || 0) < -10);
+  if (lowPerformers.length > 0) {
+    recommendations.push("Review underperforming stocks and consider rebalancing your portfolio.");
   }
   
   return recommendations;
@@ -332,15 +337,31 @@ function getStockSector(symbol) {
     'TSLA': 'Consumer Discretionary',
     'NVDA': 'Technology',
     'META': 'Technology',
-    'NFLX': 'Communication Services'
+    'NFLX': 'Communication Services',
+    'JPM': 'Financial Services',
+    'JNJ': 'Healthcare',
+    'PG': 'Consumer Staples',
+    'KO': 'Consumer Staples',
+    'DIS': 'Communication Services',
+    'V': 'Financial Services',
+    'MA': 'Financial Services'
   };
   
   return sectorMap[symbol.toUpperCase()] || 'Unknown';
 }
 
 function calculateVolatility(portfolio) {
-  // Mock volatility calculation
-  return Math.random() * 30 + 5; // 5-35% range
+  // Enhanced volatility calculation based on gain/loss percentages
+  const gainLossPercentages = portfolio
+    .filter(stock => stock.gainLossPercentage !== undefined)
+    .map(stock => Math.abs(stock.gainLossPercentage));
+  
+  if (gainLossPercentages.length === 0) {
+    return Math.random() * 15 + 5; // Fallback: 5-20% range
+  }
+  
+  const avgVolatility = gainLossPercentages.reduce((sum, vol) => sum + vol, 0) / gainLossPercentages.length;
+  return Math.min(avgVolatility, 35); // Cap at 35%
 }
 
 // Portfolio analytics endpoint
@@ -356,25 +377,30 @@ router.post('/analytics', authenticateToken, async (req, res) => {
     let sectorTotalValue = 0;
     portfolio.forEach(stock => {
       const sector = getStockSector(stock.symbol);
-      sectors[sector] = (sectors[sector] || 0) + stock.totalValue;
-      sectorTotalValue += stock.totalValue;
+      const stockValue = stock.totalValue || (stock.shares * stock.currentPrice) || 0;
+      sectors[sector] = (sectors[sector] || 0) + stockValue;
+      sectorTotalValue += stockValue;
     });
+    
     const sectorBreakdown = Object.keys(sectors).map(sector => ({
       sector,
       value: sectors[sector],
       weight: (sectorTotalValue > 0 ? (sectors[sector] / sectorTotalValue) * 100 : 0)
     }));
 
-    // Portfolio value history (expects array of {date, portfolioValue})
+    // Portfolio value history
     let portfolioHistory = [];
-    if (Array.isArray(history)) {
+    if (Array.isArray(history) && history.length > 0) {
       portfolioHistory = history.map(h => ({
         date: h.date,
-        value: h.portfolioValue
+        value: h.portfolioValue || 0
       }));
     } else {
-      // fallback: single current value
-      portfolioHistory = [{ date: new Date().toISOString(), value: totalValue }];
+      // Fallback: single current value
+      portfolioHistory = [{ 
+        date: new Date().toISOString(), 
+        value: sectorTotalValue 
+      }];
     }
 
     // Calculate dashboard metrics
