@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-console.log('🚀 Setting up QuantMind...\n');
+console.log('🚀 Setting up Alpha Quant...\n');
 
 // Check if Node.js version is compatible
 const nodeVersion = process.version;

@@ -1,7 +1,0 @@
-Portfolio Holdings
-
-AAPL 100 shares
-MSFT 50 shares  
-TSLA 25 shares
-NVDA 75 shares
-GOOGL 30 shares
