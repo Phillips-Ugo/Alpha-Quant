@@ -9,7 +9,7 @@ import {
   XMarkIcon
 } from '@heroicons/react/24/outline';
 
-const Navbar = ({ onMenuClick, appName = 'Alpha Mind' }) => {
+const Navbar = ({ onMenuClick, appName = 'QuantMind' }) => {
   const { user, logout } = useAuth();
   // ...existing code...
   const [userMenuOpen, setUserMenuOpen] = useState(false);

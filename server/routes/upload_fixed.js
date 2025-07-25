@@ -66,20 +66,7 @@ router.post('/portfolio', authenticateToken, upload.single('file'), async (req, 
         extractedData = await extractFromPDF(fileBuffer);
       } else if (fileType === 'text/plain') {
         const text = fileBuffer.toString('utf-8');
-        // Try RAG pipeline first for text files
-        try {
-          console.log('Attempting RAG extraction for text file...');
-          extractedData = await extractPortfolioFromText(text);
-          if (extractedData && extractedData.length > 0) {
-            console.log('RAG extraction succeeded for text file');
-          } else {
-            console.log('RAG extraction returned empty results, trying simple extraction');
-            extractedData = await extractPortfolioFromTextSimple(text);
-          }
-        } catch (ragError) {
-          console.log('RAG failed for text file, falling back to simple extraction:', ragError.message);
-          extractedData = await extractPortfolioFromTextSimple(text);
-        }
+        extractedData = await extractPortfolioFromText(text);
       } else if (fileType === 'text/csv') {
         extractedData = await extractFromCSV(fileBuffer);
       } else if (fileType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || 
@@ -117,63 +104,11 @@ router.post('/portfolio', authenticateToken, upload.single('file'), async (req, 
 
     console.log('Processed portfolio:', processedPortfolio);
 
-    // Save the processed portfolio to the user's portfolio using batch-add
-    try {
-      // Get portfolio storage from portfolio route
-      const portfolioRoute = require('./portfolio');
-      
-      // Add portfolio data to the user's portfolio
-      const userId = req.user.userId;
-      
-      // Get existing portfolios object from portfolio route
-      const fs = require('fs');
-      const path = require('path');
-      const portfolioDataPath = path.join(__dirname, '../data/portfolios.json');
-      
-      let portfolios = {};
-      try {
-        if (fs.existsSync(portfolioDataPath)) {
-          portfolios = JSON.parse(fs.readFileSync(portfolioDataPath, 'utf8'));
-        }
-      } catch (err) {
-        console.log('No existing portfolio data found, starting fresh');
-      }
-      
-      // Initialize user portfolio if not exists
-      if (!portfolios[userId]) {
-        portfolios[userId] = [];
-      }
-      
-      // Add new stocks to portfolio (avoiding duplicates)
-      for (const stock of processedPortfolio) {
-        // Add unique ID for frontend operations
-        const stockWithId = {
-          ...stock,
-          id: Date.now().toString() + Math.floor(Math.random() * 10000)
-        };
-        portfolios[userId].push(stockWithId);
-      }
-      
-      // Save updated portfolios
-      const dataDir = path.dirname(portfolioDataPath);
-      if (!fs.existsSync(dataDir)) {
-        fs.mkdirSync(dataDir, { recursive: true });
-      }
-      fs.writeFileSync(portfolioDataPath, JSON.stringify(portfolios, null, 2));
-      
-      console.log(`Added ${processedPortfolio.length} stocks to user ${userId}'s portfolio`);
-      
-    } catch (portfolioError) {
-      console.error('Error saving to portfolio:', portfolioError);
-      // Don't fail the upload if portfolio save fails
-    }
-
     res.json({
       message: 'Portfolio uploaded and processed successfully',
       extractedData: processedPortfolio,
       fileName: fileName,
-      stocksFound: processedPortfolio.length,
-      saved: true // Indicate that data was saved to portfolio
+      stocksFound: processedPortfolio.length
     });
 
   } catch (error) {
@@ -198,30 +133,20 @@ async function extractFromPDF(buffer) {
     console.log('Extracted PDF text length:', text.length);
     console.log('PDF text preview:', text.substring(0, 200));
     
-    // Try RAG pipeline first - this is the primary method
-    try {
-      console.log('Attempting RAG extraction for PDF...');
-      const ragExtraction = await extractPortfolioFromText(text);
-      if (ragExtraction && ragExtraction.length > 0) {
-        console.log('RAG extraction succeeded for PDF:', ragExtraction);
-        return ragExtraction;
-      } else {
-        console.log('RAG extraction returned empty results, trying simple extraction');
-      }
-    } catch (ragError) {
-      console.log('RAG extraction failed for PDF:', ragError.message);
-    }
-    
-    // Fall back to simple extraction if RAG fails or returns empty
+    // Use simple text extraction first as fallback
     const simpleExtraction = await extractPortfolioFromTextSimple(text);
     if (simpleExtraction && simpleExtraction.length > 0) {
-      console.log('Simple extraction succeeded for PDF:', simpleExtraction);
+      console.log('Simple extraction succeeded:', simpleExtraction);
       return simpleExtraction;
     }
     
-    // Return simple extraction results even if empty - better than throwing error
-    console.log('Returning simple extraction results (may be empty):', simpleExtraction);
-    return simpleExtraction;
+    // Try RAG extraction if simple fails and we have the dependencies
+    try {
+      return await extractPortfolioFromText(text);
+    } catch (ragError) {
+      console.log('RAG extraction failed, using simple extraction results');
+      return simpleExtraction;
+    }
     
   } catch (error) {
     console.error('PDF parsing error:', error);
@@ -235,21 +160,12 @@ async function extractFromPDF(buffer) {
         throw new Error('File appears to be empty');
       }
       
-      // Try RAG first on plain text too
-      try {
-        console.log('Attempting RAG extraction on plain text fallback...');
-        const ragExtraction = await extractPortfolioFromText(text);
-        if (ragExtraction && ragExtraction.length > 0) {
-          return ragExtraction;
-        }
-      } catch (ragError) {
-        console.log('RAG extraction failed on plain text fallback:', ragError.message);
+      const simpleExtraction = await extractPortfolioFromTextSimple(text);
+      if (simpleExtraction && simpleExtraction.length > 0) {
+        return simpleExtraction;
       }
       
-      // Final fallback to simple extraction
-      const simpleExtraction = await extractPortfolioFromTextSimple(text);
-      return simpleExtraction; // Return even if empty
-      
+      return await extractPortfolioFromText(text);
     } catch (txtError) {
       console.error('Text fallback parsing error:', txtError);
       throw new Error('Failed to parse file. The file may be corrupted, password-protected, or in an unsupported format. Please try a plain text file or check that your PDF contains selectable text.');
@@ -586,42 +502,24 @@ async function processPortfolioWithRAG(extractedData) {
   try {
     const processedData = [];
     
-    console.log('Processing extracted data:', extractedData);
-    
     for (const item of extractedData) {
       if (item.symbol && item.shares) {
-        const cleanSymbol = item.symbol.toUpperCase().trim();
-        
-        // Validate symbol before processing
-        if (!isValidStockSymbol(cleanSymbol)) {
-          console.warn(`Skipping invalid symbol: ${item.symbol}`);
-          continue;
-        }
-        
         // Get current stock price if purchase price is 0
         let purchasePrice = parseFloat(item.purchasePrice) || 0;
         if (purchasePrice === 0) {
           try {
-            purchasePrice = await getCurrentStockPrice(cleanSymbol);
+            purchasePrice = await getCurrentStockPrice(item.symbol);
           } catch (priceError) {
-            console.warn(`Failed to get price for ${cleanSymbol}, using default`);
+            console.warn(`Failed to get price for ${item.symbol}, using default`);
             purchasePrice = 100; // Default fallback price
           }
         }
         
         const shares = parseFloat(item.shares);
-        
-        // Get current price with error handling
-        let currentPrice;
-        try {
-          currentPrice = await getCurrentStockPrice(cleanSymbol);
-        } catch (priceError) {
-          console.warn(`Failed to get current price for ${cleanSymbol}, using purchase price`);
-          currentPrice = purchasePrice;
-        }
+        const currentPrice = await getCurrentStockPrice(item.symbol);
         
         processedData.push({
-          symbol: cleanSymbol,
+          symbol: item.symbol.toUpperCase(),
           shares: shares,
           purchasePrice: purchasePrice,
           purchaseDate: item.purchaseDate || new Date().toISOString(),
@@ -630,57 +528,28 @@ async function processPortfolioWithRAG(extractedData) {
           gainLoss: (currentPrice - purchasePrice) * shares,
           gainLossPercentage: purchasePrice > 0 ? ((currentPrice - purchasePrice) / purchasePrice) * 100 : 0
         });
-        
-        console.log(`Processed ${cleanSymbol}: ${shares} shares at $${currentPrice}`);
       }
     }
     
-    console.log(`Successfully processed ${processedData.length} stocks`);
     return processedData;
   } catch (error) {
     console.error('RAG processing error:', error);
-    throw new Error('Failed to process portfolio data: ' + error.message);
+    throw new Error('Failed to process portfolio data');
   }
-}
-
-// Helper function to validate stock symbol format
-function isValidStockSymbol(symbol) {
-  if (!symbol || typeof symbol !== 'string') return false;
-  
-  // Basic symbol validation: 1-5 characters, letters only, uppercase
-  const symbolRegex = /^[A-Z]{1,5}$/;
-  return symbolRegex.test(symbol.toUpperCase());
 }
 
 // Helper function to get current stock price
 async function getCurrentStockPrice(symbol) {
   try {
-    // Validate symbol format first
-    const cleanSymbol = symbol.toUpperCase().trim();
-    if (!isValidStockSymbol(cleanSymbol)) {
-      console.warn(`Invalid symbol format: ${symbol}`);
-      return 100; // Default fallback price for invalid symbols
-    }
-
-    console.log(`Fetching price for symbol: ${cleanSymbol}`);
-    const quote = await yahooFinanceService.getStockQuote(cleanSymbol);
-    
-    if (quote && quote.error) {
-      console.warn(`Yahoo Finance returned error for ${cleanSymbol}:`, quote.error);
-      return 100; // Default fallback price
-    }
-    
-    if (quote && quote.currentPrice && quote.currentPrice > 0) {
-      console.log(`Found price for ${cleanSymbol}: $${quote.currentPrice}`);
+    const quote = await yahooFinanceService.getStockQuote(symbol.toUpperCase());
+    if (quote && quote.currentPrice) {
       return quote.currentPrice;
     }
-    
-    // Fallback: default price if API succeeds but no price found
-    console.warn(`No valid price found for ${cleanSymbol}, using default`);
-    return 100;
+    // Fallback: random price if API fails
+    return Math.random() * 100 + 50;
   } catch (error) {
-    console.error(`Yahoo Finance price error for ${symbol}:`, error.message);
-    return 100; // Default fallback price
+    console.error('Yahoo Finance price error:', error);
+    return Math.random() * 100 + 50;
   }
 }
 

@@ -1,0 +1,9 @@
+My Stock Portfolio
+
+Apple Inc. (AAPL): 150 shares purchased at $180 per share
+Microsoft Corporation (MSFT): 75 shares at $350 each
+Tesla Inc. (TSLA): 50 shares bought for $250 per share
+NVIDIA Corporation (NVDA): 100 shares at $900 each
+Amazon.com Inc. (AMZN): 25 shares purchased at $3200 per share
+
+Total portfolio value: Approximately $1,000,000

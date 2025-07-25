@@ -1,7 +1,7 @@
 {
-  "name": "financial-analysis-app",
+  "name": "quantmind",
   "version": "1.0.0",
-  "description": "A comprehensive financial analysis web app with AI-powered insights and portfolio management",
+  "description": "QuantMind - A comprehensive financial analysis web app with AI-powered insights and portfolio management",
   "main": "server/index.js",
   "scripts": {
     "dev": "concurrently \"npm run server\" \"npm run client\"",
@@ -36,6 +36,7 @@
     "openai": "^4.20.1",
     "pdf-parse": "^1.1.1",
     "socket.io": "^4.7.4",
+    "xlsx": "^0.18.5",
     "yahoo-finance2": "^2.13.3"
   },
   "devDependencies": {

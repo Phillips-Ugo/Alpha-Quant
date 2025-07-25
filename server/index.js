@@ -57,14 +57,15 @@ io.on('connection', (socket) => {
   });
 });
 
-// Serve static files in production
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../client/build')));
-  
-  app.get('*', (req, res) => {
+// Serve static files in production and development
+app.use(express.static(path.join(__dirname, '../client/build')));
+
+// Catch all handler: send back React's index.html file for any non-API routes
+app.get('*', (req, res) => {
+  if (!req.url.startsWith('/api/')) {
     res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
-  });
-}
+  }
+});
 
 // Error handling middleware
 app.use((err, req, res, next) => {

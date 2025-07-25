@@ -1,4 +1,4 @@
-# Financial Analysis App
+# QuantMind
 
 A comprehensive financial analysis web application with AI-powered insights, portfolio management, and market analysis. Built with React, Node.js, and modern web technologies.
 
