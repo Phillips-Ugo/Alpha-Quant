@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  LineChart, 
-  Line, 
   AreaChart, 
   Area, 
   PieChart, 
@@ -11,7 +9,6 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  Legend, 
   ResponsiveContainer 
 } from 'recharts';
 import { 
@@ -20,7 +17,8 @@ import {
   CurrencyDollarIcon,
   ChartBarIcon,
   EyeIcon,
-  PlusIcon
+  PlusIcon,
+  TrashIcon
 } from '@heroicons/react/24/outline';
 import axios from 'axios';
 import toast from 'react-hot-toast';
@@ -34,7 +32,6 @@ const Dashboard = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   // Open Add Stock modal if redirected from login
   React.useEffect(() => {
-    const location = window.location;
     // Use React Router location state if available
     if (window.history && window.history.state && window.history.state.usr && window.history.state.usr.showAddStock) {
       setShowAddModal(true);
@@ -62,19 +59,34 @@ const Dashboard = () => {
       const portfolioData = portfolioRes.data.portfolio || [];
       setPortfolio(portfolioData);
 
-      // Build portfolio value history (example: use purchaseDate and totalValue)
+      // Build portfolio value history (example: use purchaseDate and currentValue)
       // You may want to keep a real history in backend/db; here we mock with current value
       const history = portfolioData.map(stock => ({
         date: stock.purchaseDate || new Date().toISOString().split('T')[0],
-        portfolioValue: stock.totalValue || 0
+        portfolioValue: stock.currentValue || 0
       }));
 
-      // Fetch analytics from backend (POST portfolio and history)
-      const analyticsRes = await axios.post('/api/ai/analytics', {
+      // Fetch both analytics endpoints
+      // 1. Portfolio analytics for correct total values
+      const portfolioAnalyticsRes = await axios.get('/api/portfolio/analytics');
+      const portfolioAnalytics = portfolioAnalyticsRes.data || {};
+      
+      // 2. AI analytics for sector breakdown and charts
+      const aiAnalyticsRes = await axios.post('/api/ai/analytics', {
         portfolio: portfolioData,
         history
       });
-      setAnalytics(analyticsRes.data || {});
+      const aiAnalytics = aiAnalyticsRes.data || {};
+      
+      // Merge analytics data: use portfolio analytics for totals, AI analytics for charts
+      const mergedAnalytics = {
+        ...aiAnalytics,
+        totalValue: portfolioAnalytics.totalValue || 0,
+        totalGainLoss: portfolioAnalytics.totalGainLoss || 0,
+        totalGainLossPercentage: portfolioAnalytics.totalGainLossPercentage || 0
+      };
+      
+      setAnalytics(mergedAnalytics);
 
       // Market overview (now from Alpha Vantage economic indicators)
       const marketRes = await axios.get('/api/market-overview');
@@ -134,6 +146,21 @@ const Dashboard = () => {
       toast.error(error.response?.data?.error || 'Failed to add stock');
     } finally {
       setAdding(false);
+    }
+  };
+
+  const handleRemoveStock = async (stockId, symbol) => {
+    if (!window.confirm(`Are you sure you want to remove ${symbol} from your portfolio?`)) {
+      return;
+    }
+
+    try {
+      await axios.delete(`/api/portfolio/remove/${stockId}`);
+      toast.success(`${symbol} removed from portfolio`);
+      fetchDashboardData(); // Refresh the portfolio data
+    } catch (error) {
+      console.error('Remove stock error:', error);
+      toast.error(error.response?.data?.error || 'Failed to remove stock');
     }
   };
 
@@ -343,12 +370,15 @@ const Dashboard = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Gain/Loss
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {portfolio.length > 0 ? (
                 portfolio.map((stock) => {
-                  const Icon = getIconForPerformance(stock.gainLossPercentage);
+                  const Icon = getIconForPerformance(stock.gainLossPercent);
                   return (
                     <tr key={stock.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -368,22 +398,31 @@ const Dashboard = () => {
                         {formatCurrency(stock.currentPrice)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatCurrency(stock.totalValue)}
+                        {formatCurrency(stock.currentValue)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          <Icon className={`h-4 w-4 mr-1 ${getColorForPerformance(stock.gainLossPercentage)}`} />
-                          <span className={`text-sm font-medium ${getColorForPerformance(stock.gainLossPercentage)}`}>
-                            {formatPercentage(stock.gainLossPercentage)}
+                          <Icon className={`h-4 w-4 mr-1 ${getColorForPerformance(stock.gainLossPercent)}`} />
+                          <span className={`text-sm font-medium ${getColorForPerformance(stock.gainLossPercent)}`}>
+                            {formatPercentage(stock.gainLossPercent)}
                           </span>
                         </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <button
+                          onClick={() => handleRemoveStock(stock.id, stock.symbol)}
+                          className="inline-flex items-center p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors duration-200"
+                          title={`Remove ${stock.symbol} from portfolio`}
+                        >
+                          <TrashIcon className="h-4 w-4" />
+                        </button>
                       </td>
                     </tr>
                   );
                 })
               ) : (
                 <tr>
-                  <td colSpan="6" className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
                     <ChartBarIcon className="h-12 w-12 mx-auto mb-4 text-gray-300" />
                     <p className="text-lg font-medium">No stocks in your portfolio</p>
                     <p className="text-sm">Add some stocks to get started</p>

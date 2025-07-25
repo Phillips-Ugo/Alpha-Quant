@@ -2,25 +2,7 @@ const express = require('express');
 const { spawn } = require('child_process');
 const path = require('path');
 const router = express.Router();
-const jwt = require('jsonwebtoken');
 const yahooFinanceService = require('../services/yahooFinance');
-
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ error: 'Access token required' });
-  }
-
-  jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key', (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: 'Invalid token' });
-    }
-    req.user = user;
-    next();
-  });
-};
 
 // Health check endpoint - add this first
 router.get('/health', (req, res) => {
@@ -77,6 +59,7 @@ router.post('/analyze', async (req, res) => {
     let result = '';
     let error = '';
     let isProcessRunning = true;
+    let responseAlreadySent = false;
 
     // Set up data collectors
     pythonProcess.stdout.on('data', (data) => { 
@@ -90,6 +73,8 @@ router.post('/analyze', async (req, res) => {
 
     // Handle process completion
     pythonProcess.on('close', async (code) => {
+      if (responseAlreadySent) return;
+      
       isProcessRunning = false;
       const duration = Date.now() - startTime;
       
@@ -116,6 +101,7 @@ router.post('/analyze', async (req, res) => {
             console.log(`Training process completed with code ${trainCode} for ${ticker}`);
           });
           
+          responseAlreadySent = true;
           return res.status(202).json({ 
             message: 'Model is being trained. Please try again in a few minutes.', 
             success: false, 
@@ -131,6 +117,7 @@ router.post('/analyze', async (req, res) => {
           console.error(`Error output: ${error}`);
           console.error(`Stdout output: ${result}`);
           
+          responseAlreadySent = true;
           return res.status(500).json({ 
             error: 'Analysis process failed', 
             details: error || 'Unknown Python error',
@@ -143,6 +130,7 @@ router.post('/analyze', async (req, res) => {
         // Parse results
         if (!result.trim()) {
           console.error('No output from Python script');
+          responseAlreadySent = true;
           return res.status(500).json({
             error: 'No output from analysis script',
             stderr: error,
@@ -157,6 +145,7 @@ router.post('/analyze', async (req, res) => {
           console.error('Failed to parse Python output:', parseError);
           console.error('Raw output:', result);
           
+          responseAlreadySent = true;
           return res.status(500).json({ 
             error: 'Invalid response from analysis script', 
             parseError: parseError.message, 
@@ -168,6 +157,7 @@ router.post('/analyze', async (req, res) => {
         // Check if the parsed data indicates an error
         if (!stockData.success && stockData.error) {
           console.error('Python script returned error:', stockData.error);
+          responseAlreadySent = true;
           return res.status(400).json({
             error: stockData.error,
             success: false,
@@ -203,22 +193,27 @@ router.post('/analyze', async (req, res) => {
         };
 
         console.log(`✅ Analysis completed for ${ticker} in ${duration}ms`);
+        responseAlreadySent = true;
         res.json(finalResult);
 
       } catch (err) {
-        console.error('❌ Unexpected error in analysis route:', err);
-        res.status(500).json({ 
-          error: 'Unexpected server error', 
-          details: err.message, 
-          success: false 
-        });
+        if (!responseAlreadySent) {
+          console.error('❌ Unexpected error in analysis route:', err);
+          responseAlreadySent = true;
+          res.status(500).json({ 
+            error: 'Unexpected server error', 
+            details: err.message, 
+            success: false 
+          });
+        }
       }
     });
 
     // Handle process errors
     pythonProcess.on('error', (err) => {
-      if (isProcessRunning) {
+      if (isProcessRunning && !responseAlreadySent) {
         isProcessRunning = false;
+        responseAlreadySent = true;
         console.error('❌ Failed to start Python process:', err);
         res.status(500).json({ 
           error: 'Failed to start analysis process', 
@@ -230,8 +225,9 @@ router.post('/analyze', async (req, res) => {
 
     // Set timeout for the process
     setTimeout(() => {
-      if (isProcessRunning) {
+      if (isProcessRunning && !responseAlreadySent) {
         console.warn(`⏰ Python process timeout for ${ticker}`);
+        responseAlreadySent = true;
         pythonProcess.kill('SIGTERM');
         res.status(408).json({
           error: 'Analysis timeout',
@@ -242,12 +238,14 @@ router.post('/analyze', async (req, res) => {
     }, 120000); // 2 minute timeout
 
   } catch (error) {
-    console.error('❌ Stock analysis error:', error);
-    res.status(500).json({ 
-      error: 'Internal server error', 
-      details: error.message, 
-      success: false 
-    });
+    if (!responseAlreadySent) {
+      console.error('❌ Stock analysis error:', error);
+      res.status(500).json({ 
+        error: 'Internal server error', 
+        details: error.message, 
+        success: false 
+      });
+    }
   }
 });
 
@@ -403,7 +401,7 @@ router.get('/history/:ticker', async (req, res) => {
 });
 
 // Authenticated routes
-router.get('/quote/:symbol', authenticateToken, async (req, res) => {
+router.get('/quote/:symbol', async (req, res) => {
   try {
     const { symbol } = req.params;
     console.log(`💰 Fetching authenticated quote for: ${symbol}`);
@@ -422,7 +420,7 @@ router.get('/quote/:symbol', authenticateToken, async (req, res) => {
   }
 });
 
-router.post('/quotes', authenticateToken, async (req, res) => {
+router.post('/quotes', async (req, res) => {
   try {
     const { symbols } = req.body;
     

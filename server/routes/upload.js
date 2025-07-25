@@ -3,24 +3,6 @@ const yahooFinanceService = require('../services/yahooFinance');
 const multer = require('multer');
 const pdfParse = require('pdf-parse');
 const router = express.Router();
-const jwt = require('jsonwebtoken');
-
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ error: 'Access token required' });
-  }
-
-  jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key', (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: 'Invalid token' });
-    }
-    req.user = user;
-    next();
-  });
-};
 
 // Configure multer for file uploads
 const storage = multer.memoryStorage();
@@ -47,7 +29,7 @@ const upload = multer({
 });
 
 // Upload portfolio file - UPDATED WITH BETTER ERROR HANDLING
-router.post('/portfolio', authenticateToken, upload.single('file'), async (req, res) => {
+router.post('/portfolio', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -122,8 +104,8 @@ router.post('/portfolio', authenticateToken, upload.single('file'), async (req, 
       // Get portfolio storage from portfolio route
       const portfolioRoute = require('./portfolio');
       
-      // Add portfolio data to the user's portfolio
-      const userId = req.user.userId;
+      // Add portfolio data to the user's portfolio (using default user since authentication was removed)
+      const userId = 'default-user';
       
       // Get existing portfolios object from portfolio route
       const fs = require('fs');

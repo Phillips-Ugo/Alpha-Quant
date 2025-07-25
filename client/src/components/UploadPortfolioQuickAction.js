@@ -17,9 +17,6 @@ const UploadPortfolioQuickAction = ({ onPortfolioUpdate }) => {
       formData.append('file', file);
       const response = await fetch('/api/upload/portfolio', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
         body: formData
       });
       if (response.ok) {
@@ -29,8 +26,7 @@ const UploadPortfolioQuickAction = ({ onPortfolioUpdate }) => {
         const batchRes = await fetch('/api/portfolio/batch-add', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify({ stocks: data.extractedData || [] })
         });

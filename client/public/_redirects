@@ -1,0 +1,9 @@
+# Netlify redirects file for React Router
+/*    /index.html   200
+
+# Handle client-side routing
+/dashboard  /index.html  200
+/portfolio  /index.html  200
+/news       /index.html  200
+/ai-chat    /index.html  200
+/stocks     /index.html  200

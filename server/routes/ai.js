@@ -1,32 +1,14 @@
 const express = require('express');
 const router = express.Router();
-const jwt = require('jsonwebtoken');
 const axios = require('axios'); // Added missing axios import
-
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ error: 'Access token required' });
-  }
-
-  jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key', (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: 'Invalid token' });
-    }
-    req.user = user;
-    next();
-  });
-};
 
 // In-memory chat history (replace with database in production)
 let chatHistory = {};
 
 // Get chat history
-router.get('/chat', authenticateToken, (req, res) => {
+router.get('/chat', (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = 'default-user'; // Since we removed authentication, use a default user
     const userChatHistory = chatHistory[userId] || [];
     
     res.json({ messages: userChatHistory });
@@ -37,9 +19,9 @@ router.get('/chat', authenticateToken, (req, res) => {
 });
 
 // Send message to AI
-router.post('/chat', authenticateToken, async (req, res) => {
+router.post('/chat', async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = 'default-user'; // Since we removed authentication, use a default user
     const { message, portfolioContext } = req.body;
 
     if (!message) {
@@ -92,9 +74,9 @@ router.post('/chat', authenticateToken, async (req, res) => {
 });
 
 // Clear chat history
-router.delete('/chat', authenticateToken, (req, res) => {
+router.delete('/chat', (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = 'default-user'; // Since we removed authentication, use a default user
     chatHistory[userId] = [];
     
     res.json({ message: 'Chat history cleared' });
@@ -104,13 +86,14 @@ router.delete('/chat', authenticateToken, (req, res) => {
   }
 });
 
-// Generate AI response - OpenAI DIRECT VERSION
+// Generate AI response - OpenAI DIRECT VERSION with Fallback
 async function generateAIResponse(message, portfolioContext, userChatHistory) {
   try {
     // Use environment variable for API key ONLY
     const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      throw new Error('OpenAI API key not configured');
+    if (!apiKey || apiKey.includes('sk-proj')) {
+      console.warn('OpenAI API key not properly configured, using fallback responses');
+      return generateFallbackResponse(message, portfolioContext);
     }
 
     // Build a broad context including portfolio and chat history
@@ -161,15 +144,52 @@ async function generateAIResponse(message, portfolioContext, userChatHistory) {
     return aiText.trim();
   } catch (error) {
     console.error('AI response generation error (OpenAI):', error?.response?.data || error.message);
-    if (error.code === 'ECONNABORTED') {
-      return "I'm sorry, the request timed out. Please try again.";
-    } else if (error.response?.status === 401) {
-      return "I'm sorry, there's an authentication issue with the AI service.";
-    } else if (error.response?.status === 429) {
-      return "I'm sorry, the AI service is currently rate limited. Please try again in a moment.";
-    }
-    return "I'm sorry, I'm having trouble processing your request right now. Please try again later.";
+    
+    // If OpenAI fails, use fallback
+    console.log('Falling back to local response generation');
+    return generateFallbackResponse(message, portfolioContext);
   }
+}
+
+// Fallback AI response system when OpenAI is unavailable
+function generateFallbackResponse(message, portfolioContext) {
+  const messageLower = message.toLowerCase();
+  
+  // Portfolio-related queries
+  if (messageLower.includes('portfolio') || messageLower.includes('stocks') || messageLower.includes('investment')) {
+    if (portfolioContext && portfolioContext.portfolio && portfolioContext.portfolio.length > 0) {
+      const totalValue = portfolioContext.totalValue || 0;
+      const gainers = portfolioContext.portfolio.filter(stock => (stock.gainLoss || 0) > 0);
+      const losers = portfolioContext.portfolio.filter(stock => (stock.gainLoss || 0) < 0);
+      
+      return `Based on your current portfolio worth $${totalValue.toLocaleString()}, you have ${gainers.length} stocks gaining and ${losers.length} stocks declining. ${gainers.length > losers.length ? 'Your portfolio is performing well overall!' : 'Consider reviewing your positions and diversification.'} Remember, this is educational information only - consult a financial advisor for investment decisions.`;
+    } else {
+      return "I see you're asking about portfolios. To get started with investing, consider researching diversified index funds, understanding your risk tolerance, and only investing money you can afford to lose. Always consult with a financial advisor for personalized advice.";
+    }
+  }
+  
+  // Market analysis queries
+  if (messageLower.includes('market') || messageLower.includes('analysis') || messageLower.includes('trend')) {
+    return "Market analysis involves studying various factors including economic indicators, company fundamentals, technical patterns, and market sentiment. For current market trends, I recommend checking recent financial news and consulting professional analysis. Remember to diversify your investments and never invest more than you can afford to lose.";
+  }
+  
+  // Stock-specific queries
+  if (messageLower.includes('stock') || messageLower.includes('buy') || messageLower.includes('sell')) {
+    return "When evaluating stocks, consider factors like company fundamentals (revenue, profit, debt), industry trends, competition, and your investment timeline. I can't provide specific buy/sell recommendations, but I encourage you to research thoroughly and consult with a financial advisor before making investment decisions.";
+  }
+  
+  // Risk management
+  if (messageLower.includes('risk') || messageLower.includes('diversification')) {
+    return "Risk management is crucial in investing. Key principles include: diversifying across different asset classes and sectors, only investing money you can afford to lose, having an emergency fund, and understanding your risk tolerance. Consider your investment timeline and goals when making decisions.";
+  }
+  
+  // General financial advice
+  if (messageLower.includes('advice') || messageLower.includes('help') || messageLower.includes('how')) {
+    return "I'm here to provide educational financial information! I can help explain investment concepts, discuss portfolio analysis, and share general market insights. However, I cannot provide specific investment advice. For personalized recommendations, please consult with a qualified financial advisor. What specific topic would you like to learn about?";
+  }
+  
+  // Default response
+  return "Thank you for your question! I'm an AI assistant designed to provide educational financial information. I can help explain investment concepts, discuss portfolio basics, and share general market insights. However, I cannot provide specific investment advice - please consult with a financial advisor for personalized recommendations. How can I help you learn about investing today?";
 }
 
 // Build context for AI - ENHANCED VERSION
@@ -198,7 +218,7 @@ function buildContext(portfolioContext, chatHistory) {
 }
 
 // Get AI insights for portfolio
-router.post('/insights', authenticateToken, async (req, res) => {
+router.post('/insights', async (req, res) => {
   try {
     const { portfolio } = req.body;
     
@@ -365,7 +385,7 @@ function calculateVolatility(portfolio) {
 }
 
 // Portfolio analytics endpoint
-router.post('/analytics', authenticateToken, async (req, res) => {
+router.post('/analytics', async (req, res) => {
   try {
     const { portfolio, history } = req.body;
     if (!portfolio || !Array.isArray(portfolio)) {

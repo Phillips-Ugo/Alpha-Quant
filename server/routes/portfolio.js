@@ -1,23 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const jwt = require('jsonwebtoken');
 const yahooFinanceService = require('../services/yahooFinance');
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ error: 'Access token required' });
-  }
-
-  jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key', (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: 'Invalid token' });
-    }
-    req.user = user;
-    next();
-  });
-};
 
 // Persistent portfolio storage using file system
 const fs = require('fs');
@@ -50,18 +33,61 @@ function savePortfolios(portfolios) {
   }
 }
 
-// Get user portfolio with real-time data
-router.get('/', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.user.userId;
-    const portfolios = loadPortfolios();
-    const userPortfolio = portfolios[userId] || [];
+// Helper function to create default portfolio stocks
+function createDefaultPortfolio() {
+  const defaultStocks = [
+    { symbol: 'AAPL', name: 'Apple Inc.', shares: 50 },
+    { symbol: 'NVDA', name: 'NVIDIA Corporation', shares: 25 },
+    { symbol: 'MSFT', name: 'Microsoft Corporation', shares: 40 },
+    { symbol: 'TSLA', name: 'Tesla Inc.', shares: 15 },
+    { symbol: 'GOOGL', name: 'Alphabet Inc.', shares: 30 }
+  ];
+
+  return defaultStocks.map(stock => {
+    // Generate random purchase prices (realistic ranges for each stock)
+    const priceRanges = {
+      'AAPL': { min: 150, max: 200 },
+      'NVDA': { min: 400, max: 600 },
+      'MSFT': { min: 300, max: 450 },
+      'TSLA': { min: 200, max: 350 },
+      'GOOGL': { min: 120, max: 180 }
+    };
+
+    const range = priceRanges[stock.symbol];
+    const purchasePrice = Math.round((Math.random() * (range.max - range.min) + range.min) * 100) / 100;
     
+    // Random purchase date within the last year
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    const randomDate = new Date(oneYearAgo.getTime() + Math.random() * (Date.now() - oneYearAgo.getTime()));
+
+    return {
+      id: Date.now().toString() + Math.floor(Math.random() * 10000) + stock.symbol,
+      symbol: stock.symbol,
+      shares: stock.shares,
+      purchasePrice: purchasePrice,
+      purchaseDate: randomDate.toISOString()
+    };
+  });
+}
+
+// Get user portfolio with real-time data
+router.get('/', async (req, res) => {
+  try {
+    const userId = 'default-user'; // Since we removed authentication, use a default user
+    const portfolios = loadPortfolios();
+    let userPortfolio = portfolios[userId] || [];
+    
+    // If portfolio is empty, create default stocks
     if (userPortfolio.length === 0) {
-      return res.json({
-        portfolio: [],
-        totalValue: 0
-      });
+      console.log('Creating default portfolio for new user');
+      userPortfolio = createDefaultPortfolio();
+      
+      // Save the default portfolio
+      portfolios[userId] = userPortfolio;
+      savePortfolios(portfolios);
+      
+      console.log('Default portfolio created with stocks:', userPortfolio.map(s => s.symbol).join(', '));
     }
 
     // Get real-time portfolio data
@@ -81,9 +107,9 @@ router.get('/', authenticateToken, async (req, res) => {
 
 // Add stock to portfolio
 // Batch add stocks to portfolio
-router.post('/batch-add', authenticateToken, async (req, res) => {
+router.post('/batch-add', async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = 'default-user'; // Since we removed authentication, use a default user
     const stocks = req.body.stocks;
     if (!Array.isArray(stocks) || stocks.length === 0) {
       return res.status(400).json({ error: 'No stocks provided' });
@@ -123,9 +149,9 @@ router.post('/batch-add', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to batch add stocks' });
   }
 });
-router.post('/add', authenticateToken, async (req, res) => {
+router.post('/add', async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = 'default-user'; // Since we removed authentication, use a default user
     const { symbol, shares, purchasePrice, purchaseDate } = req.body;
 
     if (!symbol || !shares || !purchasePrice) {
@@ -196,12 +222,13 @@ router.post('/add', authenticateToken, async (req, res) => {
 });
 
 // Update stock in portfolio
-router.put('/update/:stockId', authenticateToken, (req, res) => {
+router.put('/update/:stockId', (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = 'default-user'; // Since we removed authentication, use a default user
     const { stockId } = req.params;
     const { shares, purchasePrice } = req.body;
 
+    const portfolios = loadPortfolios();
     if (!portfolios[userId]) {
       return res.status(404).json({ error: 'Portfolio not found' });
     }
@@ -233,11 +260,12 @@ router.put('/update/:stockId', authenticateToken, (req, res) => {
 });
 
 // Remove stock from portfolio
-router.delete('/remove/:stockId', authenticateToken, (req, res) => {
+router.delete('/remove/:stockId', (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = 'default-user'; // Since we removed authentication, use a default user
     const { stockId } = req.params;
 
+    const portfolios = loadPortfolios();
     if (!portfolios[userId]) {
       return res.status(404).json({ error: 'Portfolio not found' });
     }
@@ -248,6 +276,9 @@ router.delete('/remove/:stockId', authenticateToken, (req, res) => {
     }
 
     portfolios[userId].splice(stockIndex, 1);
+    
+    // Save the updated portfolios to file
+    savePortfolios(portfolios);
 
     res.json({
       message: 'Stock removed from portfolio',
@@ -261,9 +292,10 @@ router.delete('/remove/:stockId', authenticateToken, (req, res) => {
 });
 
 // Get portfolio analytics
-router.get('/analytics', authenticateToken, async (req, res) => {
+router.get('/analytics', async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = 'default-user'; // Since we removed authentication, use a default user
+    const portfolios = loadPortfolios();
     const portfolio = portfolios[userId] || [];
 
     // Get real-time portfolio data with sector information
