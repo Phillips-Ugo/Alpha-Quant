@@ -244,8 +244,8 @@ const StockCharts = ({ predictionData }) => {
             <div className="text-quant-gold font-bold">${predictionData.predicted_price?.toFixed(2)}</div>
           </div>
           <div className="bg-quant-dark p-3 rounded-lg border border-quant-gold">
-            <div className="text-quant-green font-mono">Confidence</div>
-            <div className="text-quant-gold font-bold">{(predictionData.confidence * 100).toFixed(1)}%</div>
+            <div className="text-quant-green font-mono">Model Accuracy</div>
+            <div className="text-quant-gold font-bold">{predictionData.accuracy?.toFixed(1)}%</div>
           </div>
           <div className="bg-quant-dark p-3 rounded-lg border border-quant-gold">
             <div className="text-quant-green font-mono">Days Ahead</div>

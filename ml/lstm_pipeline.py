@@ -146,16 +146,16 @@ def predict_future(model, last_sequence, scaler_y, days_ahead=30):
     except Exception as e:
         raise ValueError(f"Prediction failed: {str(e)}")
 
-def calculate_confidence(y_test, predictions):
-    """Calculate model confidence based on test performance"""
+def calculate_accuracy(y_test, predictions):
+    """Calculate model accuracy based on test performance"""
     try:
-        mse = np.mean((y_test - predictions) ** 2)
-        mae = np.mean(np.abs(y_test - predictions))
-        # Convert to confidence score (0-1)
-        confidence = max(0, min(1, 1 - (mae * 10)))  # Simple confidence metric
-        return float(confidence)
+        # Convert back to original scale for accurate percentage calculation
+        mape = np.mean(np.abs((y_test - predictions) / y_test)) * 100
+        # Convert MAPE to accuracy percentage (higher is better)
+        accuracy = max(0, min(100, 100 - mape))  # Accuracy as percentage
+        return float(accuracy)
     except:
-        return 0.5  # Default confidence
+        return 50.0  # Default accuracy as percentage
 
 def main():
     parser = argparse.ArgumentParser(description='Alpha Mind LSTM Stock Pipeline')
@@ -199,9 +199,9 @@ def main():
         if args.predict:
             print(f"[Alpha Mind] Generating predictions for {ticker}...", file=sys.stderr)
             
-            # Get test predictions for confidence calculation
+            # Get test predictions for accuracy calculation
             test_predictions = model.predict(X_test, verbose=0)
-            confidence = calculate_confidence(y_test, test_predictions)
+            accuracy = calculate_accuracy(y_test, test_predictions)
             
             # Generate future predictions
             last_seq = X_test[-1:]
@@ -236,7 +236,7 @@ def main():
                 'success': True,
                 'current_price': float(actual_prices[-1]) if actual_prices else None,
                 'predicted_price': float(predicted_prices[-1]) if predicted_prices else None,
-                'confidence': confidence,
+                'accuracy': accuracy,
                 'prediction_date': prediction_dates[-1] if prediction_dates else None,
                 'actual_prices': actual_prices,
                 'dates': actual_dates,
