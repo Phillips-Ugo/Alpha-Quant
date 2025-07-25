@@ -19,10 +19,15 @@ const io = socketIo(server, {
 
 // Security middleware
 app.use(helmet());
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production' ? false : 'http://localhost:3000',
+
+// CORS configuration for production and development
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? process.env.CORS_ORIGIN || true
+    : 'http://localhost:3000',
   credentials: true
-}));
+};
+app.use(cors(corsOptions));
 
 // Rate limiting
 const limiter = rateLimit({
@@ -58,12 +63,29 @@ io.on('connection', (socket) => {
 });
 
 // Serve static files in production and development
-app.use(express.static(path.join(__dirname, '../client/build')));
+const clientBuildPath = path.join(__dirname, '../client/build');
+console.log('Looking for client build at:', clientBuildPath);
+
+if (process.env.NODE_ENV === 'production') {
+  // Check if build directory exists
+  const fs = require('fs');
+  if (fs.existsSync(clientBuildPath)) {
+    console.log('✅ Client build directory found');
+    app.use(express.static(clientBuildPath));
+  } else {
+    console.log('❌ Client build directory not found');
+  }
+}
 
 // Catch all handler: send back React's index.html file for any non-API routes
 app.get('*', (req, res) => {
   if (!req.url.startsWith('/api/')) {
-    res.sendFile(path.join(__dirname, '../client/build', 'index.html'));
+    const indexPath = path.join(clientBuildPath, 'index.html');
+    if (process.env.NODE_ENV === 'production') {
+      res.sendFile(indexPath);
+    } else {
+      res.json({ message: 'API is running. Frontend should be served separately in development.' });
+    }
   }
 });
 
