@@ -15,6 +15,7 @@ import {
 } from '@heroicons/react/24/outline';
 
 const StockAnalysis = () => {
+  // eslint-disable-next-line no-unused-vars
   const [selectedStock, setSelectedStock] = useState(null);
   const [loading, setLoading] = useState(false);
   const [stockData, setStockData] = useState(null);

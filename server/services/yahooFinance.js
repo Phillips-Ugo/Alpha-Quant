@@ -257,9 +257,11 @@ class YahooFinanceService {
         
         if (quote) {
           const currentValue = holding.shares * quote.currentPrice;
-          const costBasis = holding.shares * holding.avgPrice;
+          // Support both avgPrice and purchasePrice field names for backwards compatibility
+          const purchasePrice = holding.avgPrice || holding.purchasePrice || 0;
+          const costBasis = holding.shares * purchasePrice;
           const gainLoss = currentValue - costBasis;
-          const gainLossPercent = (gainLoss / costBasis) * 100;
+          const gainLossPercent = costBasis > 0 ? (gainLoss / costBasis) * 100 : 0;
 
           totalValue += currentValue;
           totalCost += costBasis;

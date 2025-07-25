@@ -7,6 +7,9 @@ const socketIo = require('socket.io');
 const path = require('path');
 require('dotenv').config();
 
+// Suppress deprecation warnings for cleaner output
+process.noDeprecation = true;
+
 const app = express();
 app.set('trust proxy', 1);
 const server = http.createServer(app);
@@ -41,7 +44,6 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Routes
-app.use('/api/auth', require('./routes/auth'));
 app.use('/api/portfolio', require('./routes/portfolio'));
 app.use('/api/stocks', require('./routes/stocks'));
 app.use('/api/ai', require('./routes/ai'));

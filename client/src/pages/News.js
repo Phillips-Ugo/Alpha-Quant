@@ -1,10 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  NewspaperIcon, 
-  TrendingUpIcon, 
-  TrendingDownIcon,
-  ExclamationTriangleIcon,
-  CheckCircleIcon,
   ClockIcon,
   FireIcon
 } from '@heroicons/react/24/outline';
@@ -20,6 +15,17 @@ const News = () => {
   // Removed category selection
   const [portfolio, setPortfolio] = useState(null);
 
+  const fetchRecommendations = useCallback(async () => {
+    try {
+      const response = await axios.get('/api/news/recommendations', {
+        params: { portfolio: JSON.stringify(portfolio.portfolio) }
+      });
+      setRecommendations(response.data.recommendations);
+    } catch (error) {
+      console.error('Failed to fetch recommendations:', error);
+    }
+  }, [portfolio]);
+
   useEffect(() => {
     fetchNewsData();
     fetchPortfolio();
@@ -29,7 +35,7 @@ const News = () => {
     if (portfolio) {
       fetchRecommendations();
     }
-  }, [portfolio]);
+  }, [portfolio, fetchRecommendations]);
 
   const fetchNewsData = async () => {
     try {
@@ -56,17 +62,6 @@ const News = () => {
       setPortfolio(response.data);
     } catch (error) {
       console.error('Failed to fetch portfolio:', error);
-    }
-  };
-
-  const fetchRecommendations = async () => {
-    try {
-      const response = await axios.get('/api/news/recommendations', {
-        params: { portfolio: JSON.stringify(portfolio.portfolio) }
-      });
-      setRecommendations(response.data.recommendations);
-    } catch (error) {
-      console.error('Failed to fetch recommendations:', error);
     }
   };
 

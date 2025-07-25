@@ -2,27 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { 
   LineChart, 
   Line, 
-  BarChart, 
-  Bar,
-  PieChart, 
-  Pie, 
-  Cell,
   XAxis, 
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  Legend, 
+  Legend,
   ResponsiveContainer 
 } from 'recharts';
 import { 
-  PlusIcon, 
-  PencilIcon, 
-  TrashIcon,
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
-  CurrencyDollarIcon,
-  ChartBarIcon,
-  DocumentArrowUpIcon
+  PlusIcon
 } from '@heroicons/react/24/outline';
 import axios from 'axios';
 import UploadPortfolioQuickAction from '../components/UploadPortfolioQuickAction';
@@ -32,6 +22,7 @@ const Portfolio = () => {
   const [portfolio, setPortfolio] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
+  // eslint-disable-next-line no-unused-vars
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingStock, setEditingStock] = useState(null);
   const [formData, setFormData] = useState({

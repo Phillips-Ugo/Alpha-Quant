@@ -6,9 +6,7 @@ import {
   HomeIcon,
   ChartBarIcon,
   ChatBubbleLeftRightIcon,
-  NewspaperIcon,
-  PlusIcon,
-  DocumentArrowUpIcon
+  NewspaperIcon
 } from '@heroicons/react/24/outline';
 
 const Sidebar = ({ open, onClose, appName = 'Alpha Quant' }) => {

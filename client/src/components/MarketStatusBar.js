@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   ArrowTrendingUpIcon, 
-  ArrowTrendingDownIcon,
-  CurrencyDollarIcon,
-  ChartBarIcon
+  ArrowTrendingDownIcon 
 } from '@heroicons/react/24/outline';
 import axios from 'axios';
 
