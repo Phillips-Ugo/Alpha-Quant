@@ -22,8 +22,8 @@ app.use(helmet({
 // CORS configuration
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://your-frontend-domain.vercel.app'] 
-    : ['http://localhost:3000'],
+    ? process.env.CORS_ORIGIN || true
+    : 'http://localhost:3000',
   credentials: true,
   optionsSuccessStatus: 200
 };
@@ -42,13 +42,12 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // API Routes
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/portfolio', require('./routes/portfolio'));
-app.use('/api/stocks', require('./routes/stocks'));
-app.use('/api/news', require('./routes/news'));
-app.use('/api/upload', require('./routes/upload'));
-app.use('/api/ai', require('./routes/ai'));
-app.use('/api', require('./routes/market'));
+app.use('/api/portfolio', require('../server/routes/portfolio'));
+app.use('/api/stocks', require('../server/routes/stocks'));
+app.use('/api/news', require('../server/routes/news'));
+app.use('/api/upload', require('../server/routes/upload'));
+app.use('/api/ai', require('../server/routes/ai'));
+app.use('/api', require('../server/routes/market'));
 
 // Health check
 app.get('/api/health', (req, res) => {
