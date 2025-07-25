@@ -1,24 +1,25 @@
-# QuantMind
+# Alpha Quant
+
+**Developed by: Ugochukwu Belusochim**
 
 A comprehensive financial analysis web application with AI-powered insights, portfolio management, and market analysis. Built with React, Node.js, and modern web technologies.
 
 ## 🚀 Features
 
 ### Core Features
+- **Smart Portfolio Upload**: Upload portfolio files (PDF, CSV, Excel, TXT) with RAG-powered AI extraction
 - **Portfolio Management**: Track and manage your stock holdings with real-time performance data
 - **AI Financial Advisor**: Chat with an AI-powered financial advisor for personalized insights
-- **Market News & Events**: Stay informed with real-time market news and sentiment analysis
-- **RAG-Powered Portfolio Upload**: Upload portfolio files (PDF, CSV, Excel) with intelligent data extraction
-- **Interactive Charts**: Beautiful visualizations of portfolio performance and market data
-- **Personalized Recommendations**: Get AI-generated recommendations based on your portfolio and market conditions
+- **Market Dashboard**: Real-time market data, news, and comprehensive analytics
+- **Interactive Visualizations**: Beautiful charts and graphs for portfolio performance analysis
+- **Secure Authentication**: JWT-based user authentication and authorization
 
-### Technical Features
-- **Modern UI/UX**: Built with React, Tailwind CSS, and Framer Motion
-- **Real-time Data**: Live stock prices and market updates
-- **Responsive Design**: Works seamlessly on desktop, tablet, and mobile
-- **Secure Authentication**: JWT-based authentication with password hashing
-- **File Upload**: Support for multiple file formats with intelligent parsing
-- **API Integration**: Ready for real stock data APIs (Alpha Vantage, Yahoo Finance, etc.)
+### AI-Powered Features
+- **RAG (Retrieval-Augmented Generation)**: Intelligent document processing for portfolio extraction
+- **LangChain Integration**: Advanced natural language processing for financial documents
+- **OpenAI GPT Integration**: Conversational AI for financial advice and insights
+- **Sentiment Analysis**: Market sentiment analysis using BERT models
+- **LSTM Predictions**: Advanced machine learning models for stock price predictions
 
 ## 🛠️ Tech Stack
 
@@ -29,7 +30,7 @@ A comprehensive financial analysis web application with AI-powered insights, por
 - **React Router** - Client-side routing
 - **Axios** - HTTP client for API calls
 - **React Hot Toast** - Toast notifications
-- **Framer Motion** - Animation library
+- **React Dropzone** - File upload with drag & drop
 - **Heroicons** - Beautiful SVG icons
 
 ### Backend
@@ -38,16 +39,20 @@ A comprehensive financial analysis web application with AI-powered insights, por
 - **JWT** - JSON Web Tokens for authentication
 - **bcryptjs** - Password hashing
 - **Multer** - File upload handling
-- **PDF Parse** - PDF text extraction
+- **pdf-parse** - PDF text extraction
+- **xlsx** - Excel file processing
 - **Socket.io** - Real-time communication
 - **Helmet** - Security middleware
-- **Rate Limiting** - API rate limiting
+- **Yahoo Finance API** - Real-time stock data
 
-### Development Tools
-- **Nodemon** - Auto-restart server during development
-- **Concurrently** - Run multiple commands simultaneously
-- **ESLint** - Code linting
-- **PostCSS** - CSS processing
+### AI & Machine Learning
+- **Python** - Machine learning backend
+- **LangChain** - LLM application framework
+- **OpenAI API** - GPT models for AI features
+- **FAISS** - Vector database for semantic search
+- **TensorFlow/Keras** - LSTM models for predictions
+- **pandas** - Data manipulation and analysis
+- **yfinance** - Yahoo Finance data extraction
 
 ## 📦 Installation
 
@@ -72,44 +77,63 @@ A comprehensive financial analysis web application with AI-powered insights, por
    cd ..
    ```
 
-3. **Environment Configuration**
+## 🚀 Installation & Setup
+
+### Prerequisites
+- **Node.js** (v16 or higher)
+- **npm** or **yarn** package manager
+- **Python** (v3.8 or higher) for AI features
+- **Git** for version control
+
+### Quick Start
+
+1. **Clone the repository**
    ```bash
-   # Copy the example environment file
-   cp env.example .env
-   
-   # Edit the .env file with your configuration
-   nano .env
+   git clone https://github.com/Phillips-Ugo/Alpha-Quant.git
+   cd Alpha-Quant
    ```
 
-4. **Start the development servers**
+2. **Install dependencies**
    ```bash
-   # Start both frontend and backend
-   npm run dev
+   # Install backend dependencies
+   npm install
    
-   # Or start them separately:
-   # Backend only
-   npm run server
+   # Install frontend dependencies
+   cd client
+   npm install
+   cd ..
    
-   # Frontend only
-   npm run client
+   # Install Python dependencies for AI features
+   cd ml
+   pip install -r requirements.txt
+   cd ..
+   ```
+
+3. **Environment Configuration**
+   ```bash
+   # Create and configure environment file
+   cp .env.example .env
+   # Edit .env with your API keys (see configuration section below)
+   ```
+
+4. **Start the application**
+   ```bash
+   # Start the backend server (from root directory)
+   npm start
+   
+   # In a new terminal, start the frontend (optional - already served by backend)
+   cd client
+   npm start
    ```
 
 5. **Access the application**
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:5000
+   - Application: http://localhost:5000
+   - API Documentation: http://localhost:5000/api
 
 ## 🔧 Configuration
 
 ### Environment Variables
 
-# FinBertModel Download Instructions
-
-The FinBertModel directory is not included in this repository due to GitHub's file size limits. Please download the model from the provided cloud storage link and place it in the project root directory:
-
-1. Download FinBertModel from: [YOUR_CLOUD_LINK_HERE]
-2. Place the folder at: `C:/Users/ugoch/OneDrive/Desktop/Summer Projects/FinancialAnalysis/FinBertModel`
-
-Update the link above with your actual cloud storage URL.
 Create a `.env` file in the root directory with the following variables:
 
 ```env
@@ -120,120 +144,191 @@ NODE_ENV=development
 # JWT Configuration
 JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
 
-# OpenAI Configuration (for AI features)
+# OpenAI Configuration (Required for AI features)
 OPENAI_API_KEY=your-openai-api-key-here
 
-# Stock API Configuration
+# Stock API Configuration (Optional - demo data available)
 ALPHA_VANTAGE_API_KEY=your-alpha-vantage-api-key
 YAHOO_FINANCE_API_KEY=your-yahoo-finance-api-key
 
-# News API Configuration
+# News API Configuration (Optional)
 NEWS_API_KEY=your-news-api-key
+
+# File Upload Configuration
+MAX_FILE_SIZE=10485760
+UPLOAD_PATH=./uploads
 ```
 
-### API Keys Setup
+### Required API Keys
 
-To get real data, you'll need to sign up for the following APIs:
+To enable full functionality, you'll need:
 
-1. **Alpha Vantage** (Stock Data): https://www.alphavantage.co/
-2. **Yahoo Finance** (Alternative Stock Data): https://finance.yahoo.com/
-3. **OpenAI** (AI Features): https://openai.com/
-4. **News API** (Market News): https://newsapi.org/
+1. **OpenAI API Key** (Required for portfolio upload AI features)
+   - Sign up at: https://openai.com/
+   - Required for RAG-powered document processing
+
+2. **Alpha Vantage** (Optional - for enhanced stock data)
+   - Sign up at: https://www.alphavantage.co/
+
+3. **News API** (Optional - for market news)
+   - Sign up at: https://newsapi.org/
 
 ## 📱 Usage
 
-### Getting Started
+1. **Portfolio Management**
+   - **Manual Entry**: Add stocks individually with symbol, shares, and purchase details
+   - **Smart Upload**: Upload portfolio files (PDF, CSV, Excel, TXT) for automatic extraction
+   - **Real-time Tracking**: View current prices, gains/losses, and portfolio performance
+   - **Interactive Charts**: Visualize portfolio allocation and performance trends
 
-1. **Sign Up**: Create a new account with your email and password
-2. **Add Portfolio**: Either manually enter your stocks or upload a portfolio file
-3. **Explore Dashboard**: View your portfolio performance and market overview
-4. **Chat with AI**: Ask questions about your portfolio and get personalized advice
-5. **Stay Informed**: Check the news section for market updates and recommendations
+2. **AI-Powered Features**
+   - **RAG Upload**: Upload any portfolio document and let AI extract the data
+   - **Financial Chat**: Ask questions about your portfolio and market trends
+   - **Smart Analysis**: Get AI-generated insights and recommendations
+   - **Sentiment Analysis**: Market sentiment from news and social media
 
-### Portfolio Upload
+3. **Market Dashboard**
+   - **Real-time Data**: Live stock prices and market indicators
+   - **News Feed**: Latest financial news and market updates
+   - **Market Analysis**: Technical indicators and trend analysis
 
-The app supports uploading portfolio files in the following formats:
-- **PDF**: Portfolio statements and reports
-- **CSV**: Comma-separated values with stock data
-- **Excel**: Spreadsheet files (.xlsx)
+### Portfolio Upload Guide
 
-The RAG (Retrieval Augmented Generation) system will automatically extract:
-- Stock symbols
-- Number of shares
-- Purchase prices
-- Purchase dates
+The app supports intelligent extraction from multiple file formats:
 
-### AI Chat Features
+**Supported Formats:**
+- 📄 **PDF**: Brokerage statements, portfolio reports
+- 📊 **Excel (.xlsx)**: Spreadsheets with portfolio data
+- 📝 **CSV**: Comma-separated value files
+- 📄 **Text**: Plain text files with stock information
 
-The AI financial advisor can help with:
-- Portfolio analysis and recommendations
-- Market trend explanations
-- Risk assessment
-- Investment strategies
-- Technical analysis insights
+**Extraction Process:**
+1. Upload your file using drag & drop or file picker
+2. AI-powered RAG system analyzes the document
+3. Extracts stock symbols, shares, prices, and dates
+4. Validates data and fetches current market prices
+5. Adds validated stocks to your portfolio
+
+**Example Portfolio Format:**
+```
+My Portfolio Holdings:
+AAPL: 100 shares at $150 per share
+MSFT: 50 shares purchased at $300 each
+TSLA - 25 shares, bought for $250 per share
+```
 
 ## 🏗️ Project Structure
 
 ```
-Financial-Analysis/
-├── client/                 # React frontend
-│   ├── public/            # Static files
+Alpha Quant/
+├── client/                 # React frontend application
+│   ├── public/            # Static files and assets
 │   ├── src/
-│   │   ├── components/    # Reusable components
-│   │   ├── contexts/      # React contexts
-│   │   ├── pages/         # Page components
-│   │   └── App.js         # Main app component
-│   └── package.json
-├── server/                # Node.js backend
-│   ├── routes/           # API routes
-│   │   ├── auth.js       # Authentication routes
+│   │   ├── components/    # Reusable UI components
+│   │   ├── contexts/      # React context providers
+│   │   ├── pages/         # Main page components
+│   │   └── App.js         # Root application component
+│   └── package.json       # Frontend dependencies
+├── server/                # Node.js backend server
+│   ├── data/             # JSON data storage
+│   ├── routes/           # API route handlers
+│   │   ├── auth.js       # User authentication
 │   │   ├── portfolio.js  # Portfolio management
-│   │   ├── stocks.js     # Stock data
-│   │   ├── ai.js         # AI chat
-│   │   ├── news.js       # News and events
-│   │   └── upload.js     # File upload
+│   │   ├── stocks.js     # Stock data APIs
+│   │   ├── ai.js         # AI chat functionality
+│   │   ├── news.js       # News and market data
+│   │   └── upload.js     # File upload & processing
+│   ├── services/         # Business logic services
 │   └── index.js          # Server entry point
+├── ml/                   # Python AI/ML components
+│   ├── rag_portfolio.py  # RAG document processing
+│   ├── lstm_*.py         # LSTM prediction models
+│   ├── bert_*.py         # BERT sentiment analysis
+│   └── requirements.txt  # Python dependencies
+├── .env                  # Environment configuration
 ├── package.json          # Root package.json
-└── README.md
+└── README.md             # Project documentation
 ```
 
-## 🚀 Deployment
+## 🔒 Security & Performance
 
-### Production Build
+- **Authentication**: JWT-based secure user authentication
+- **Data Protection**: bcrypt password hashing and validation
+- **API Security**: Rate limiting, CORS, and Helmet security headers
+- **File Validation**: Secure file upload with type and size validation
+- **Error Handling**: Comprehensive error handling and logging
+- **Performance**: Caching, compression, and optimized database queries
 
-1. **Build the frontend**
-   ```bash
-   cd client
-   npm run build
-   ```
+## 🚀 Production Deployment
 
-2. **Set environment variables for production**
-   ```bash
-   NODE_ENV=production
-   ```
+### Building for Production
 
-3. **Start the production server**
-   ```bash
-   npm start
-   ```
+```bash
+# Build the React frontend
+cd client
+npm run build
+cd ..
 
-### Deployment Options
+# Set production environment
+export NODE_ENV=production
 
-- **Heroku**: Easy deployment with Git integration
-- **Vercel**: Great for frontend deployment
-- **AWS**: Scalable cloud deployment
-- **DigitalOcean**: VPS deployment
+# Start the production server
+npm start
+```
 
-## 🔒 Security Features
+### Environment Setup
 
-- JWT-based authentication
-- Password hashing with bcrypt
-- Rate limiting on API endpoints
-- CORS protection
-- Helmet security headers
-- Input validation and sanitization
+For production, ensure these environment variables are set:
+- `NODE_ENV=production`
+- `JWT_SECRET` (strong secret key)
+- `OPENAI_API_KEY` (for AI features)
+- `PORT` (default: 5000)
+
+## 📊 Performance Features
+
+- **Real-time Updates**: Live stock price updates via WebSocket
+- **Caching**: Intelligent caching of market data and user sessions
+- **Lazy Loading**: Components and routes loaded on demand
+- **Optimized Queries**: Efficient database queries and API calls
+- **Responsive Design**: Optimized for all device sizes
 
 ## 🤝 Contributing
+
+Contributions are welcome! Please follow these guidelines:
+
+1. **Fork the repository**
+2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
+3. **Commit changes**: `git commit -m 'Add amazing feature'`
+4. **Push to branch**: `git push origin feature/amazing-feature`
+5. **Open a Pull Request**
+
+### Development Guidelines
+- Follow the existing code style and conventions
+- Add comments for complex logic
+- Update documentation for new features
+- Test thoroughly before submitting
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 👨‍💻 Author
+
+**Ugochukwu Belusochim**
+- GitHub: [@Phillips-Ugo](https://github.com/Phillips-Ugo)
+- Project: [Alpha Quant Financial Analysis Platform](https://github.com/Phillips-Ugo/Alpha-Quant)
+
+## 🙏 Acknowledgments
+
+- OpenAI for GPT models and AI capabilities
+- Yahoo Finance for real-time market data
+- LangChain for RAG implementation
+- React and Node.js communities for excellent frameworks
+- All contributors and users of Alpha Quant
+
+---
+
+**Built with ❤️ by Ugochukwu Belusochim**
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)

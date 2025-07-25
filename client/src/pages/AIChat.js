@@ -127,7 +127,7 @@ const AIChat = () => {
           <div className="flex items-center">
             <ChatBubbleLeftRightIcon className="h-6 w-6 text-quant-green mr-3" />
             <div>
-              <h1 className="text-2xl font-extrabold text-quant-gold font-mono drop-shadow-lg">QuantMind AI Financial Advisor</h1>
+              <h1 className="text-2xl font-extrabold text-quant-gold font-mono drop-shadow-lg">Alpha Quant AI Financial Advisor</h1>
               <p className="text-quant-green font-mono">Get personalized financial insights and advice</p>
             </div>
           </div>

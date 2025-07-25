@@ -45,8 +45,8 @@ function AppContent() {
   return (
     <Router>
       <div className="min-h-screen bg-quant-gradient flex">
-        <Navbar onMenuClick={() => setSidebarOpen(true)} appName="QuantMind" />
-        <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} appName="QuantMind" />
+        <Navbar onMenuClick={() => setSidebarOpen(true)} appName="Alpha Quant" />
+        <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} appName="Alpha Quant" />
         <div className="flex-1 flex flex-col lg:pl-64 pt-16">
           <MarketStatusBar />
           <main className="flex-1 p-2 sm:p-4 lg:p-6 w-full max-w-7xl mx-auto">

@@ -11,7 +11,7 @@ import {
   DocumentArrowUpIcon
 } from '@heroicons/react/24/outline';
 
-const Sidebar = ({ open, onClose, appName = 'QuantMind' }) => {
+const Sidebar = ({ open, onClose, appName = 'Alpha Quant' }) => {
   const location = useLocation();
 
   const navigation = [

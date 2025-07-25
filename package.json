@@ -1,7 +1,7 @@
 {
-  "name": "quantmind",
+  "name": "alpha-quant",
   "version": "1.0.0",
-  "description": "QuantMind - A comprehensive financial analysis web app with AI-powered insights and portfolio management",
+  "description": "Alpha Quant - A comprehensive financial analysis web app with AI-powered insights and portfolio management",
   "main": "server/index.js",
   "scripts": {
     "dev": "concurrently \"npm run server\" \"npm run client\"",
@@ -9,17 +9,19 @@
     "client": "cd client && npm start",
     "build": "cd client && npm run build",
     "install-all": "npm install && cd client && npm install",
-    "start": "node server/index.js",
-    "setup": "node setup.js"
+    "start": "node server/index.js"
   },
   "keywords": [
     "finance",
     "stocks",
     "ai",
     "portfolio",
-    "analysis"
+    "analysis",
+    "rag",
+    "machine-learning",
+    "fintech"
   ],
-  "author": "Your Name",
+  "author": "Ugochukwu Belusochim",
   "license": "MIT",
   "dependencies": {
     "axios": "^1.6.0",
