@@ -25,5 +25,14 @@
     "portfolio": [],
     "createdAt": "2025-07-25T02:04:16.980Z",
     "lastLogin": "2025-07-25T02:04:17.185Z"
+  },
+  {
+    "id": "1753412912046",
+    "email": "ugochukwubelusochim10@gmail.com",
+    "password": "$2a$10$6E8AmmZrsn9mI82rW3ZZH.LGuoMJd7VxX26H//9COL3hn6gbwGP9i",
+    "name": "Belu",
+    "portfolio": [],
+    "createdAt": "2025-07-25T03:08:32.046Z",
+    "lastLogin": null
   }
 ]
