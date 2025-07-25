@@ -4,7 +4,6 @@ import {
   Bars3Icon, 
   UserCircleIcon,
   ChartBarIcon,
-  Cog6ToothIcon,
   ArrowRightOnRectangleIcon,
   XMarkIcon
 } from '@heroicons/react/24/outline';
@@ -61,10 +60,6 @@ const Navbar = ({ onMenuClick, appName = 'Alpha Quant' }) => {
                       <div className="font-bold">{user?.name}</div>
                       <div className="text-yellow-500">{user?.email}</div>
                     </div>
-                    <button className="flex items-center w-full px-4 py-2 text-sm text-yellow-300 hover:bg-gray-800">
-                      <Cog6ToothIcon className="h-4 w-4 mr-2" />
-                      Settings
-                    </button>
                     <button
                       onClick={logout}
                       className="flex items-center w-full px-4 py-2 text-sm text-yellow-300 hover:bg-gray-800"

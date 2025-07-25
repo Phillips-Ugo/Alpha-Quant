@@ -32,29 +32,29 @@ const SignUp = () => {
     setLoading(true);
 
     try {
+      // Store file for later processing after user registration
       const formData = new FormData();
       formData.append('file', file);
-
-      const response = await fetch('/api/upload/portfolio', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formData
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setPortfolio(data.extractedData || []);
-        toast.success('Portfolio uploaded successfully!');
-      } else {
-        throw new Error('Upload failed');
-      }
+      
+      // For now, just store the file and we'll process it after signup
+      setUploadedFile(file);
+      toast.success('File ready for upload. Complete signup to process your portfolio.');
+      
     } catch (error) {
-      console.error('Upload error:', error);
-      toast.error('Failed to upload portfolio file');
+      console.error('File preparation error:', error);
+      toast.error('Failed to prepare portfolio file');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const switchUploadMethod = (method) => {
+    setUploadMethod(method);
+    // Clear data when switching methods
+    if (method === 'manual') {
+      setUploadedFile(null);
+    } else {
+      setPortfolio([]);
     }
   };
 
@@ -114,24 +114,66 @@ const SignUp = () => {
       const result = await signup(formData.name, formData.email, formData.password);
       
       if (result.success) {
-        // Add portfolio stocks if any
-        if (portfolio.length > 0) {
-          for (const stock of portfolio) {
-            if (stock.symbol && stock.shares && stock.purchasePrice) {
-              await fetch('/api/portfolio/add', {
+        const token = localStorage.getItem('token');
+        
+        // Handle file upload first if there's an uploaded file
+        if (uploadedFile && uploadMethod === 'upload') {
+          try {
+            const fileFormData = new FormData();
+            fileFormData.append('file', uploadedFile);
+
+            const uploadResponse = await fetch('/api/upload/portfolio', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`
+              },
+              body: fileFormData
+            });
+
+            if (uploadResponse.ok) {
+              const uploadData = await uploadResponse.json();
+              toast.success(`Portfolio uploaded! ${uploadData.stocksFound} stocks processed.`);
+            } else {
+              const errorData = await uploadResponse.json();
+              toast.error(`Upload failed: ${errorData.error}`);
+            }
+          } catch (uploadError) {
+            console.error('Upload error:', uploadError);
+            toast.error('Failed to upload portfolio file');
+          }
+        }
+        
+        // Handle manual portfolio entry if there are stocks and no file upload
+        else if (portfolio.length > 0 && uploadMethod === 'manual') {
+          try {
+            // Filter out empty stocks
+            const validStocks = portfolio.filter(stock => 
+              stock.symbol && stock.shares && stock.purchasePrice
+            );
+
+            if (validStocks.length > 0) {
+              const portfolioResponse = await fetch('/api/portfolio/batch-add', {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${localStorage.getItem('token')}`
+                  'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({
-                  symbol: stock.symbol,
-                  shares: stock.shares,
-                  purchasePrice: stock.purchasePrice,
-                  purchaseDate: stock.purchaseDate
+                  stocks: validStocks
                 })
               });
+
+              if (portfolioResponse.ok) {
+                const portfolioData = await portfolioResponse.json();
+                toast.success(`Portfolio created with ${validStocks.length} stocks!`);
+              } else {
+                const errorData = await portfolioResponse.json();
+                toast.error(`Portfolio creation failed: ${errorData.error}`);
+              }
             }
+          } catch (portfolioError) {
+            console.error('Portfolio creation error:', portfolioError);
+            toast.error('Failed to create portfolio');
           }
         }
         
@@ -139,6 +181,7 @@ const SignUp = () => {
       }
     } catch (error) {
       console.error('Signup error:', error);
+      toast.error('Signup failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -252,7 +295,7 @@ const SignUp = () => {
               <div className="flex bg-white rounded-lg p-1 mb-6">
                 <button
                   type="button"
-                  onClick={() => setUploadMethod('manual')}
+                  onClick={() => switchUploadMethod('manual')}
                   className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
                     uploadMethod === 'manual'
                       ? 'bg-blue-600 text-white'
@@ -263,7 +306,7 @@ const SignUp = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setUploadMethod('upload')}
+                  onClick={() => switchUploadMethod('upload')}
                   className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
                     uploadMethod === 'upload'
                       ? 'bg-blue-600 text-white'
@@ -275,28 +318,56 @@ const SignUp = () => {
               </div>
 
               {uploadMethod === 'upload' ? (
-                <div {...getRootProps()} className={`
-                  border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors
-                  ${isDragActive ? 'border-blue-400 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}
-                `}>
-                  <input {...getInputProps()} />
-                  <DocumentArrowUpIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  {loading ? (
-                    <div className="spinner mx-auto mb-4"></div>
-                  ) : (
-                    <>
-                      <p className="text-lg font-medium text-gray-900 mb-2">
-                        {isDragActive ? 'Drop your file here' : 'Upload Portfolio File'}
-                      </p>
-                      <p className="text-gray-600">
-                        Drag & drop a PDF, CSV, or Excel file, or click to browse
-                      </p>
-                      {uploadedFile && (
-                        <p className="text-sm text-green-600 mt-2">
-                          ✓ {uploadedFile.name}
+                <div className="space-y-4">
+                  <div {...getRootProps()} className={`
+                    border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors
+                    ${isDragActive ? 'border-blue-400 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}
+                  `}>
+                    <input {...getInputProps()} />
+                    <DocumentArrowUpIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    {loading ? (
+                      <div className="spinner mx-auto mb-4"></div>
+                    ) : (
+                      <>
+                        <p className="text-lg font-medium text-gray-900 mb-2">
+                          {isDragActive ? 'Drop your file here' : 'Upload Portfolio File'}
                         </p>
-                      )}
-                    </>
+                        <p className="text-gray-600 text-sm">
+                          Drag & drop a PDF, CSV, or Excel file, or click to browse
+                        </p>
+                        <p className="text-xs text-gray-500 mt-2">
+                          Supported formats: PDF, CSV, Excel (.xlsx), Text files
+                        </p>
+                        {uploadedFile && (
+                          <div className="mt-3 p-2 bg-green-50 rounded-md">
+                            <p className="text-sm text-green-600 font-medium">
+                              ✓ File ready: {uploadedFile.name}
+                            </p>
+                            <p className="text-xs text-green-500">
+                              Complete signup to process your portfolio
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  
+                  {uploadedFile && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <div className="flex items-start">
+                        <div className="flex-shrink-0">
+                          <DocumentArrowUpIcon className="h-5 w-5 text-blue-400" />
+                        </div>
+                        <div className="ml-3">
+                          <h4 className="text-sm font-medium text-blue-800">
+                            Portfolio file uploaded
+                          </h4>
+                          <p className="text-sm text-blue-600">
+                            Your portfolio will be processed using our AI-powered RAG pipeline after account creation.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
               ) : (
