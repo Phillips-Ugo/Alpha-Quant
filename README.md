@@ -9,17 +9,16 @@ A comprehensive financial analysis web application with AI-powered insights, por
 ### Core Features
 - **Smart Portfolio Upload**: Upload portfolio files (PDF, CSV, Excel, TXT) with RAG-powered AI extraction
 - **Portfolio Management**: Track and manage your stock holdings with real-time performance data
-- **AI Financial Advisor**: Chat with an AI-powered financial advisor for personalized insights
+- **AI Financial Advisor**: Chat with an AI-powered (fine-tuned) financial advisor for personalized insights
 - **Market Dashboard**: Real-time market data, news, and comprehensive analytics
 - **Interactive Visualizations**: Beautiful charts and graphs for portfolio performance analysis
-- **Secure Authentication**: JWT-based user authentication and authorization
 
 ### AI-Powered Features
 - **RAG (Retrieval-Augmented Generation)**: Intelligent document processing for portfolio extraction
 - **LangChain Integration**: Advanced natural language processing for financial documents
 - **OpenAI GPT Integration**: Conversational AI for financial advice and insights
-- **Sentiment Analysis**: Market sentiment analysis using BERT models
-- **LSTM Predictions**: Advanced machine learning models for stock price predictions
+- **Sentiment Analysis**: Market sentiment analysis using FinBERT models
+- **LSTM Predictions**: Advanced machine learning models for stock price predictions and forecasting
 
 ## 🛠️ Tech Stack
 
@@ -308,10 +307,6 @@ Contributions are welcome! Please follow these guidelines:
 - Update documentation for new features
 - Test thoroughly before submitting
 
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
 ## 👨‍💻 Author
 
 **Ugochukwu Belusochim**
@@ -351,8 +346,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 For support and questions:
 - Create an issue in the GitHub repository
-- Email: support@financialanalysis.com
-- Documentation: [Wiki](https://github.com/your-repo/wiki)
+- Email: ugochukwubelusochim.stu@gmail.comcom
 
 ---
 
