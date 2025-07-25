@@ -19,16 +19,42 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Persistent portfolio storage using user service
-const userService = require('../services/userService');
+// Persistent portfolio storage using file system
+const fs = require('fs');
+const path = require('path');
 
-// Add this line to declare the portfolios object
-const portfolios = {};
+const portfolioDataPath = path.join(__dirname, '../data/portfolios.json');
+
+// Helper function to load portfolios from file
+function loadPortfolios() {
+  try {
+    if (fs.existsSync(portfolioDataPath)) {
+      return JSON.parse(fs.readFileSync(portfolioDataPath, 'utf8'));
+    }
+  } catch (error) {
+    console.error('Error loading portfolios:', error);
+  }
+  return {};
+}
+
+// Helper function to save portfolios to file
+function savePortfolios(portfolios) {
+  try {
+    const dataDir = path.dirname(portfolioDataPath);
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    fs.writeFileSync(portfolioDataPath, JSON.stringify(portfolios, null, 2));
+  } catch (error) {
+    console.error('Error saving portfolios:', error);
+  }
+}
 
 // Get user portfolio with real-time data
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
+    const portfolios = loadPortfolios();
     const userPortfolio = portfolios[userId] || [];
     
     if (userPortfolio.length === 0) {
@@ -62,7 +88,10 @@ router.post('/batch-add', authenticateToken, async (req, res) => {
     if (!Array.isArray(stocks) || stocks.length === 0) {
       return res.status(400).json({ error: 'No stocks provided' });
     }
+    
+    const portfolios = loadPortfolios();
     if (!portfolios[userId]) portfolios[userId] = [];
+    
     for (const stock of stocks) {
       if (stock.symbol && stock.shares && stock.purchasePrice) {
         // Copy all fields from LLM object
@@ -76,6 +105,10 @@ router.post('/batch-add', authenticateToken, async (req, res) => {
         portfolios[userId].push(stockEntry);
       }
     }
+    
+    // Save updated portfolios
+    savePortfolios(portfolios);
+    
     // Get updated portfolio with real-time data
     const portfolioData = await yahooFinanceService.calculatePortfolioValue(portfolios[userId]);
     res.json({
@@ -115,6 +148,7 @@ router.post('/add', authenticateToken, async (req, res) => {
       gainLossPercentage: ((stockQuote.currentPrice - parseFloat(purchasePrice)) / parseFloat(purchasePrice)) * 100
     };
 
+    const portfolios = loadPortfolios();
     if (!portfolios[userId]) {
       portfolios[userId] = [];
     }
@@ -141,6 +175,9 @@ router.post('/add', authenticateToken, async (req, res) => {
       // Add new stock
       portfolios[userId].push(stockEntry);
     }
+    
+    // Save updated portfolios
+    savePortfolios(portfolios);
 
     // Get updated portfolio with real-time data
     const portfolioData = await yahooFinanceService.calculatePortfolioValue(portfolios[userId]);

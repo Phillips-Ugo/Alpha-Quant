@@ -58,7 +58,10 @@ const UploadPortfolioQuickAction = ({ onPortfolioUpdate }) => {
     onDrop,
     accept: {
       'application/pdf': ['.pdf'],
-      'text/plain': ['.txt']
+      'text/plain': ['.txt'],
+      'text/csv': ['.csv'],
+      'application/vnd.ms-excel': ['.xls'],
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx']
     },
     multiple: false
   });
@@ -75,7 +78,7 @@ const UploadPortfolioQuickAction = ({ onPortfolioUpdate }) => {
             {isDragActive ? 'Drop your file here' : 'Upload Portfolio File'}
           </p>
           <p className="text-gray-600">
-            Drag & drop a PDF or TXT file, or click to browse
+            Drag & drop a PDF, TXT, CSV, or Excel file, or click to browse
           </p>
           {uploadedFile && (
             <p className="text-sm text-green-600 mt-2">

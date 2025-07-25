@@ -6,7 +6,7 @@
     "name": "JAne",
     "portfolio": [],
     "createdAt": "2025-07-17T04:31:55.820Z",
-    "lastLogin": "2025-07-24T20:59:38.915Z"
+    "lastLogin": "2025-07-25T01:53:25.613Z"
   },
   {
     "id": "1753205092410",
@@ -16,5 +16,14 @@
     "portfolio": [],
     "createdAt": "2025-07-22T17:24:52.410Z",
     "lastLogin": null
+  },
+  {
+    "id": "1753409056980",
+    "email": "test@upload.com",
+    "password": "$2a$10$bZz4rJzIJKXkrXdIeU0S0.NkAVWUPykjbVC7zsXW98mZqCIle.AmW",
+    "name": "Test User",
+    "portfolio": [],
+    "createdAt": "2025-07-25T02:04:16.980Z",
+    "lastLogin": "2025-07-25T02:04:17.185Z"
   }
 ]

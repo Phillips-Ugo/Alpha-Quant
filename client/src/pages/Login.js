@@ -43,7 +43,7 @@ const Login = () => {
         <div className="card-quant">
           <div className="text-center mb-8">
             <ChartBarIcon className="h-12 w-12 text-quant-green mx-auto mb-4" />
-            <h2 className="text-3xl font-extrabold text-quant-gold font-mono">Login to Alpha Mind</h2>
+            <h2 className="text-3xl font-extrabold text-quant-gold font-mono">Login to QuantMind</h2>
             <p className="text-quant-green font-mono mt-2">Access your quant dashboard</p>
           </div>
 

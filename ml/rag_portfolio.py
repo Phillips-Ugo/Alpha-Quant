@@ -1,7 +1,7 @@
 import os
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings  # Updated import
 from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
 from langchain_openai import ChatOpenAI
@@ -12,12 +12,17 @@ import re
 import json
 
 # Load API key from the .env file
-load_dotenv()
-os.environ["OPENAI_API_KEY"] = process.env.OPENAI_API_KEY
+load_dotenv(override=True)  # override=True ensures .env file takes precedence
+openai_api_key = os.getenv("OPENAI_API_KEY")
+if openai_api_key:
+    os.environ["OPENAI_API_KEY"] = openai_api_key
+    print(f"Loaded API key: {openai_api_key[:10]}...", file=sys.stderr)  # Debug log
 import getpass
 
 if not os.getenv("OPENAI_API_KEY"):
-    os.environ["OPENAI_API_KEY"] = getpass.getpass("Enter your OpenAI API key: ")
+    # Don't prompt for API key, just fail gracefully
+    print(json.dumps({"error": "OpenAI API key not configured"}))
+    sys.exit(1)
 
 def load_and_split_documents(file_path):
     # This function handles different file types
@@ -113,10 +118,16 @@ def main():
             # Default: extract portfolio as JSON
             question = """
             Extract stock portfolio information from the documents. For each stock, provide:
-            - ticker: the stock symbol (string)
-            - shares: number of shares (number)
+            - ticker: the stock symbol (string, MUST be 1-5 uppercase letters only, like AAPL, MSFT, TSLA)
+            - shares: number of shares (number, must be positive)
             - purchasePrice: the price paid per share (number, use 0 if not available)
             - purchaseDate: when purchased (ISO date string, use current date if not available)
+            
+            IMPORTANT RULES:
+            1. Only extract valid US stock symbols (1-5 uppercase letters)
+            2. Ignore any symbols that contain numbers, special characters, or are longer than 5 letters
+            3. Only include stocks with positive share counts
+            4. Common valid symbols: AAPL, MSFT, GOOGL, AMZN, TSLA, NVDA, META, etc.
             
             Return ONLY a valid JSON array in this exact format:
             [
@@ -142,15 +153,28 @@ def main():
         validated_portfolio = []
         for item in portfolio_data:
             if isinstance(item, dict) and 'ticker' in item:
+                ticker = str(item.get('ticker', '')).upper().strip()
+                shares = float(item.get('shares', 0))
+                
+                # Validate ticker format (1-5 uppercase letters only)
+                if not re.match(r'^[A-Z]{1,5}$', ticker):
+                    print(f"Skipping invalid ticker format: {ticker}", file=sys.stderr)
+                    continue
+                
+                # Validate shares (must be positive)
+                if shares <= 0:
+                    print(f"Skipping {ticker} with invalid shares: {shares}", file=sys.stderr)
+                    continue
+                
                 validated_item = {
-                    'ticker': str(item.get('ticker', '')).upper(),
-                    'shares': float(item.get('shares', 0)),
+                    'ticker': ticker,
+                    'shares': shares,
                     'purchasePrice': float(item.get('purchasePrice', 0)),
-                    'purchaseDate': item.get('purchaseDate', '2024-01-01T00:00:00.000Z')
+                    'purchaseDate': item.get('purchaseDate', '2024-01-15T00:00:00.000Z')
                 }
-                # Only add if ticker is not empty and shares > 0
-                if validated_item['ticker'] and validated_item['shares'] > 0:
-                    validated_portfolio.append(validated_item)
+                
+                validated_portfolio.append(validated_item)
+                print(f"Validated: {ticker} - {shares} shares", file=sys.stderr)
         # Output the final JSON
         print(json.dumps(validated_portfolio))
         
