@@ -250,11 +250,11 @@ const StockAnalysis = () => {
             
             <div className="bg-quant-dark p-4 rounded-lg border border-quant-gold">
               <div className="flex items-center justify-between">
-                <span className="text-quant-green font-mono">Confidence</span>
+                <span className="text-quant-green font-mono">Model Accuracy</span>
                 <ClockIcon className="h-6 w-6 text-quant-gold" />
               </div>
               <div className="text-2xl font-bold text-quant-gold mt-2">
-                {prediction.confidence ? (prediction.confidence * 100).toFixed(1) : 'N/A'}%
+                {prediction.accuracy ? prediction.accuracy.toFixed(1) : 'N/A'}%
               </div>
             </div>
           </div>
