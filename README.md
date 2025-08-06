@@ -1,4 +1,4 @@
-# Alpha Quant
+# Alpha Quant!
 
 **Developed by: Ugochukwu Belusochim**
 
