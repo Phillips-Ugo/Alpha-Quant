@@ -20,7 +20,7 @@ A comprehensive financial analysis web application with AI-powered insights, por
 - **Sentiment Analysis**: Market sentiment analysis using FinBERT models
 - **LSTM Predictions**: Advanced machine learning models for stock price predictions and forecasting
 
-## 🛠️ Tech Stack
+## 🛠️ Tech Stack 
 
 ### Frontend
 - **React 18** - Modern React with hooks and functional components
