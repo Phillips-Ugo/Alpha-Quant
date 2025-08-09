@@ -40,6 +40,12 @@
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
+    "gh-pages": "^6.3.0",
     "nodemon": "^3.0.2"
-  }
+  },
+"homepage": "https://hjsbbs.github.io/my-react-app",
+"predeploy": "npm run build",
+"deploy": "gh-pages -d build"
+
+
 }
