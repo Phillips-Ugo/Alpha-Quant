@@ -1,0 +1,69 @@
+# Dependencies
+node_modules/
+client/node_modules/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Build outputs
+client/build/
+dist/
+build/
+
+# Runtime files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# AI/ML model files
+*.h5
+*.pkl
+*.joblib
+*_model.json
+*_features.json
+*_actual_prices.json
+*_engineered_features.json
+*_lstm_model.h5
+
+# Data files
+server/data/portfolios.json
+server/data/users.json
+uploads/
+ml/tmp_*
+ml/portfolio.txt
+
+# Test files
+test_*.js
+test_*.txt
+test_*.csv
+*_test.*
+
+# Temporary files
+tmp/
+temp/
+*.tmp
