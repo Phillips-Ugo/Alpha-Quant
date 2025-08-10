@@ -12,10 +12,20 @@ const portfolioDataPath = path.join(__dirname, '../data/portfolios.json');
 function loadPortfolios() {
   try {
     if (fs.existsSync(portfolioDataPath)) {
-      return JSON.parse(fs.readFileSync(portfolioDataPath, 'utf8'));
+      const fileContent = fs.readFileSync(portfolioDataPath, 'utf8').trim();
+      if (fileContent) {
+        return JSON.parse(fileContent);
+      }
     }
   } catch (error) {
-    console.error('Error loading portfolios:', error);
+    console.error('Error loading portfolios:', error.message);
+    // If JSON is corrupted, backup and reset
+    try {
+      fs.renameSync(portfolioDataPath, portfolioDataPath + '.corrupted.' + Date.now());
+      console.log('Corrupted portfolio file backed up, will create new one');
+    } catch (backupError) {
+      console.error('Could not backup corrupted file:', backupError.message);
+    }
   }
   return {};
 }

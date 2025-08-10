@@ -29,15 +29,18 @@ router.post('/analyze', async (req, res) => {
 
     console.log(`🔍 Starting analysis for ${ticker} (${daysAhead} days ahead)`);
 
-    // Validate Python script exists
-    const pythonScriptPath = path.join(__dirname, '../../ml/lstm_pipeline.py');
-    if (!require('fs').existsSync(pythonScriptPath)) {
-      console.error(`Python script not found at: ${pythonScriptPath}`);
-      return res.status(500).json({
-        error: 'ML pipeline script not found',
-        success: false,
-        details: `Expected script at: ${pythonScriptPath}`
-      });
+    // First try the LSTM pipeline, then fallback to simple predictor
+    const lstmScriptPath = path.join(__dirname, '../../ml/lstm_pipeline.py');
+    const simpleScriptPath = path.join(__dirname, '../../ml/simple_predictor.py');
+    
+    // Try LSTM first, then fallback to simple predictor
+    let pythonScriptPath = lstmScriptPath;
+    let usingFallback = false;
+    
+    if (!require('fs').existsSync(lstmScriptPath)) {
+      console.log(`LSTM script not found, using simple predictor fallback`);
+      pythonScriptPath = simpleScriptPath;
+      usingFallback = true;
     }
 
     // Spawn Python process with proper error handling
@@ -68,7 +71,16 @@ router.post('/analyze', async (req, res) => {
     
     pythonProcess.stderr.on('data', (data) => { 
       error += data.toString();
-      console.log(`Python stderr: ${data.toString()}`);
+      const errorText = data.toString();
+      console.log(`Python stderr: ${errorText}`);
+      
+      // Check for TensorFlow import errors that suggest we should use fallback
+      if (errorText.includes('DLL load failed') || 
+          errorText.includes('ImportError') || 
+          errorText.includes('tensorflow') || 
+          errorText.includes('_pywrap_tensorflow')) {
+        console.log(`🚨 Detected TensorFlow import issue - fallback may be needed`);
+      }
     });
 
     // Handle process completion
@@ -111,11 +123,73 @@ router.post('/analyze', async (req, res) => {
           });
         }
 
-        // Check for process failure
+        // Check for process failure - try fallback if LSTM failed
         if (code !== 0) {
           console.error(`❌ Python process failed with code ${code}`);
           console.error(`Error output: ${error}`);
-          console.error(`Stdout output: ${result}`);
+          
+          // If LSTM failed and we haven't tried the fallback yet, try simple predictor
+          if (!usingFallback && require('fs').existsSync(simpleScriptPath)) {
+            console.log(`🔄 Retrying with simple predictor fallback...`);
+            
+            const fallbackArgs = [
+              simpleScriptPath, 
+              '--predict', 
+              '--days', 
+              daysAhead.toString(), 
+              ticker.toUpperCase()
+            ];
+            
+            const fallbackProcess = spawn('python', fallbackArgs, {
+              stdio: ['pipe', 'pipe', 'pipe'],
+              env: { ...process.env, PYTHONUNBUFFERED: '1' }
+            });
+            
+            let fallbackResult = '';
+            let fallbackError = '';
+            
+            fallbackProcess.stdout.on('data', (data) => { 
+              fallbackResult += data.toString(); 
+            });
+            
+            fallbackProcess.stderr.on('data', (data) => { 
+              fallbackError += data.toString();
+            });
+            
+            fallbackProcess.on('close', (fallbackCode) => {
+              if (responseAlreadySent) return;
+              
+              if (fallbackCode === 0 && fallbackResult.trim()) {
+                try {
+                  const stockData = JSON.parse(fallbackResult.trim());
+                  stockData.model_info = stockData.model_info || {};
+                  stockData.model_info.fallback_used = true;
+                  stockData.model_info.original_error = 'LSTM model failed - TensorFlow/Keras issue';
+                  
+                  responseAlreadySent = true;
+                  return res.json({
+                    success: true,
+                    data: stockData,
+                    duration: Date.now() - startTime,
+                    fallback_used: true
+                  });
+                } catch (parseError) {
+                  console.error('Failed to parse fallback output:', parseError);
+                }
+              }
+              
+              // If fallback also failed, return original error
+              responseAlreadySent = true;
+              return res.status(500).json({ 
+                error: 'Both LSTM and fallback prediction failed', 
+                details: error || 'Unknown Python error',
+                fallback_error: fallbackError,
+                success: false 
+              });
+            });
+            
+            return; // Don't continue with original error handling
+          }
           
           responseAlreadySent = true;
           return res.status(500).json({ 

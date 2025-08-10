@@ -1,20 +1,46 @@
 const yahooFinance = require('yahoo-finance2').default;
 const axios = require('axios');
 
+// Disable Yahoo Finance validation to prevent schema validation errors
+yahooFinance.setGlobalConfig({ validation: { logErrors: false, logOptionsErrors: false } });
+
+// Suppress Yahoo Finance survey notices
+yahooFinance.suppressNotices(['yahooSurvey']);
+
 class YahooFinanceService {
   constructor() {
     this.cache = new Map();
     this.cacheTimeout = 5 * 60 * 1000; // 5 minutes
   }
 
+  // Validate symbol format
+  isValidSymbol(symbol) {
+    if (!symbol || typeof symbol !== 'string') return false;
+    // Allow regular stocks (1-8 alphanumeric), indices (^SYMBOL), and other Yahoo Finance formats
+    return /^[A-Za-z0-9.\-^=]{1,12}$/.test(symbol.trim());
+  }
+
   // Get real-time stock quote
   async getStockQuote(symbol) {
     try {
-      const cacheKey = `quote_${symbol}`;
+      // Validate symbol first
+      if (!this.isValidSymbol(symbol)) {
+        console.log(`Invalid symbol format: ${symbol}`);
+        return null;
+      }
+
+      const cleanSymbol = symbol.trim().toUpperCase();
+      const cacheKey = `quote_${cleanSymbol}`;
       const cached = this.getCached(cacheKey);
       if (cached) return cached;
 
-      const quote = await yahooFinance.quote(symbol);
+      const quote = await yahooFinance.quote(cleanSymbol);
+      
+      // Additional validation to ensure quote has required fields
+      if (!quote || !quote.symbol || quote.regularMarketPrice === undefined) {
+        console.log(`Invalid quote data for symbol: ${cleanSymbol}`);
+        return null;
+      }
       
       const result = {
         symbol: quote.symbol,
@@ -40,9 +66,9 @@ class YahooFinanceService {
       this.setCached(cacheKey, result);
       return result;
     } catch (error) {
-      console.error('Yahoo Finance getStockQuote error:', error);
-      // Return a user-friendly error object
-      return { error: 'Invalid or unsupported symbol', success: false };
+      console.error(`Yahoo Finance getStockQuote error for ${symbol}:`, error.message);
+      // Return null to indicate failure - calling code should handle this
+      return null;
     }
   }
 
@@ -106,7 +132,8 @@ class YahooFinanceService {
       const quotes = await Promise.all(
         symbols.map(symbol => this.getStockQuote(symbol))
       );
-      return quotes;
+      // Filter out null responses (failed quotes)
+      return quotes.filter(quote => quote !== null);
     } catch (error) {
       console.error('Error fetching multiple quotes:', error);
       throw new Error('Failed to fetch multiple stock quotes');
