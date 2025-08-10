@@ -2,8 +2,12 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 
-
 const { spawn } = require('child_process');
+
+// Cache for market overview data
+let marketOverviewCache = null;
+let lastFetchTime = 0;
+const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes
 
 // Helper to fetch indicators using yfinance via Python
 async function fetchYFinanceIndicators() {
@@ -29,7 +33,19 @@ async function fetchYFinanceIndicators() {
 
 router.get('/market-overview', async (req, res) => {
   try {
+    // Check cache first
+    const now = Date.now();
+    if (marketOverviewCache && (now - lastFetchTime) < CACHE_DURATION) {
+      return res.json(marketOverviewCache);
+    }
+
+    console.log('🌍 Fetching market overview (cache miss)');
     const indicators = await fetchYFinanceIndicators();
+    
+    // Update cache
+    marketOverviewCache = indicators;
+    lastFetchTime = now;
+    
     res.json(indicators);
   } catch (error) {
     console.error('Market overview fetch error:', error);

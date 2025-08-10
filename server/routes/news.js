@@ -123,6 +123,31 @@ async function getMarketNews(category, limit) {
       // Use simple sentiment analysis instead of external BERT API
       const sentiment = getSimpleSentiment(article.summary || article.title);
       
+      // Safe date parsing
+      let publishedAt;
+      try {
+        if (article.time_published && article.time_published.trim()) {
+          // Alpha Vantage uses format like "20241201T123000"
+          const timeStr = article.time_published.trim();
+          if (timeStr.length >= 8) {
+            // Parse YYYYMMDD format or similar
+            const year = timeStr.substring(0, 4);
+            const month = timeStr.substring(4, 6);
+            const day = timeStr.substring(6, 8);
+            const hour = timeStr.length > 8 ? timeStr.substring(9, 11) || '00' : '00';
+            const minute = timeStr.length > 10 ? timeStr.substring(11, 13) || '00' : '00';
+            
+            publishedAt = new Date(`${year}-${month}-${day}T${hour}:${minute}:00Z`).toISOString();
+          } else {
+            publishedAt = new Date().toISOString();
+          }
+        } else {
+          publishedAt = new Date().toISOString();
+        }
+      } catch (dateError) {
+        publishedAt = new Date().toISOString();
+      }
+      
       return {
         id: idx + 1,
         title: article.title,
@@ -131,7 +156,7 @@ async function getMarketNews(category, limit) {
         impact: sentiment,
         affectedSectors: article.sector ? [article.sector] : [],
         affectedStocks: article.ticker_sentiment ? article.ticker_sentiment.map(t => t.ticker) : [],
-        publishedAt: article.time_published ? new Date(article.time_published).toISOString() : new Date().toISOString(),
+        publishedAt: publishedAt,
         source: article.source,
         url: article.url
       };
