@@ -9,6 +9,16 @@
 [build.environment]
   NODE_VERSION = "18"
 
+# Functions directory
+[functions]
+  directory = "netlify/functions"
+
+# Redirects for API routes
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
 # Main redirect rule for SPA (this fixes the 404 issue)
 [[redirects]]
   from = "/*"
