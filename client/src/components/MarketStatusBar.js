@@ -14,8 +14,8 @@ const MarketStatusBar = () => {
   });
 
   const [time, setTime] = useState(new Date());
-    // Removed unused variables setIsMarketOpen and loading
-  const [loading, setLoading] = useState(true);
+  const [flashIndex, setFlashIndex] = useState(0);
+  const [isMarketOpen] = useState(true);
 
   useEffect(() => {
     const fetchMarketData = async () => {
@@ -48,8 +48,6 @@ const MarketStatusBar = () => {
         }
       } catch (error) {
         console.error('Error fetching market data:', error);
-      } finally {
-        setLoading(false);
       }
     };
 

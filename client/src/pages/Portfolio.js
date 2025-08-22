@@ -10,8 +10,6 @@ import {
   ResponsiveContainer 
 } from 'recharts';
 import { 
-  ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon,
   PlusIcon
 } from '@heroicons/react/24/outline';
 import axios from 'axios';
@@ -24,53 +22,44 @@ const Portfolio = () => {
   const [loading, setLoading] = useState(true);
   // eslint-disable-next-line no-unused-vars
   const [showAddForm, setShowAddForm] = useState(false);
-  const [editingStock, setEditingStock] = useState(null);
-  const [formData, setFormData] = useState({
-    symbol: '',
-    shares: '',
-    purchasePrice: '',
-    purchaseDate: new Date().toISOString().split('T')[0]
-  });
+
+  const fetchPortfolioData = async () => {
+    try {
+      const response = await axios.get('/api/portfolio');
+      if (response.data.success) {
+        setPortfolio(response.data.portfolio || []);
+        setAnalytics(response.data.analytics || null);
+      }
+    } catch (error) {
+      console.error('Error fetching portfolio data:', error);
+      toast.error('Failed to load portfolio data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePortfolioUpload = (uploadedData) => {
+    setPortfolio(uploadedData);
+    toast.success('Portfolio updated successfully!');
+  };
+
+  const formatCurrency = (value) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(value);
+  };
 
   useEffect(() => {
     fetchPortfolioData();
   }, []);
 
-  const formatPercentage = (value) => {
-    return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
-  };
-
-  const getColorForPerformance = (value) => {
-    return value >= 0 ? 'text-green-600' : 'text-red-600';
-  };
-
-  const getIconForPerformance = (value) => {
-    return value >= 0 ? ArrowTrendingUpIcon : ArrowTrendingDownIcon;
-  };
-
   // Portfolio history chart data: use real user portfolio history from analytics
   const portfolioHistory = analytics?.history && analytics.history.length > 0
     ? analytics.history.map(item => ({ date: item.date, value: item.value }))
     : [];
-
-  const sectorData = analytics?.sectorBreakdown ? 
-    Object.entries(analytics.sectorBreakdown).map(([sector, value], index) => {
-      const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4', '#F97316', '#84CC16'];
-      return {
-        name: sector,
-        value: Math.round((value / analytics.totalValue) * 100),
-        color: colors[index % colors.length]
-      };
-    }) : [
-      { name: 'No Data', value: 100, color: '#9CA3AF' }
-    ];
-
-  const performanceData = analytics?.topPerformers ? 
-    analytics.topPerformers.map(stock => ({
-      symbol: stock.symbol,
-      performance: stock.gainLossPercent,
-      value: stock.currentValue
-    })) : [];
 
   if (loading) {
     return (
