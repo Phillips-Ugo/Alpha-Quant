@@ -1,10 +1,10 @@
 // API configuration for different environments
 const API_CONFIG = {
   development: {
-    baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5001',
+    baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8888/.netlify/functions',
   },
   production: {
-    baseURL: process.env.REACT_APP_API_URL || 'https://your-backend-url.railway.app',
+    baseURL: process.env.REACT_APP_API_URL || '/.netlify/functions',
   }
 };
 

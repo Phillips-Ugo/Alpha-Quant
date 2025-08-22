@@ -1,5 +1,59 @@
 const yahooFinance = require('yahoo-finance2').default;
 
+// Technical indicator calculations
+function calculateSMA(prices, period) {
+  if (prices.length < period) return prices[prices.length - 1];
+  const sum = prices.slice(-period).reduce((a, b) => a + b, 0);
+  return sum / period;
+}
+
+function calculateRSI(prices, period = 14) {
+  if (prices.length < period + 1) return 50;
+  
+  let gains = 0;
+  let losses = 0;
+  
+  for (let i = prices.length - period; i < prices.length; i++) {
+    const change = prices[i] - prices[i - 1];
+    if (change > 0) gains += change;
+    else losses -= change;
+  }
+  
+  const avgGain = gains / period;
+  const avgLoss = losses / period;
+  const rs = avgGain / avgLoss;
+  return 100 - (100 / (1 + rs));
+}
+
+function calculateMACD(prices) {
+  const ema12 = calculateEMA(prices, 12);
+  const ema26 = calculateEMA(prices, 26);
+  return ema12 - ema26;
+}
+
+function calculateEMA(prices, period) {
+  if (prices.length < period) return prices[prices.length - 1];
+  
+  let ema = prices[0];
+  const multiplier = 2 / (period + 1);
+  
+  for (let i = 1; i < prices.length; i++) {
+    ema = (prices[i] * multiplier) + (ema * (1 - multiplier));
+  }
+  
+  return ema;
+}
+
+function calculateVolatility(prices) {
+  const returns = [];
+  for (let i = 1; i < prices.length; i++) {
+    returns.push((prices[i] - prices[i-1]) / prices[i-1]);
+  }
+  const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
+  const variance = returns.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / returns.length;
+  return Math.sqrt(variance);
+}
+
 exports.handler = async (event, context) => {
   // Handle CORS
   const headers = {
@@ -224,10 +278,10 @@ exports.handler = async (event, context) => {
       }
     }
 
-    // Basic stock analysis (without ML for now)
+    // Advanced stock analysis with LSTM predictions
     if (httpMethod === 'POST' && path.includes('/analyze')) {
       const data = JSON.parse(body);
-      const { ticker } = data;
+      const { ticker, daysAhead = 30 } = data;
       
       if (!ticker) {
         return {
@@ -241,27 +295,90 @@ exports.handler = async (event, context) => {
       }
 
       try {
+        // Get basic quote and historical data
         const quote = await yahooFinance.quote(ticker);
         const history = await yahooFinance.historical(ticker, {
-          period1: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+          period1: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000), // 90 days
           period2: new Date(),
           interval: '1d'
         });
 
-        // Basic technical analysis
+        // Get LSTM prediction
+        const lstmResponse = await axios.post('/.netlify/functions/lstm-predict', {
+          symbol: ticker,
+          daysAhead: daysAhead
+        });
+
+        const prediction = lstmResponse.data.success ? lstmResponse.data.data : null;
+
+        // Calculate technical indicators
         const prices = history.map(h => h.close);
-        const avgPrice = prices.reduce((a, b) => a + b, 0) / prices.length;
+        const volumes = history.map(h => h.volume);
+        
+        const sma20 = calculateSMA(prices, 20);
+        const sma50 = calculateSMA(prices, 50);
+        const rsi = calculateRSI(prices, 14);
+        const macd = calculateMACD(prices);
+        const volatility = calculateVolatility(prices);
+
         const currentPrice = quote.regularMarketPrice;
+        const avgPrice = prices.reduce((a, b) => a + b, 0) / prices.length;
         const priceChange = currentPrice - avgPrice;
         const priceChangePercent = (priceChange / avgPrice) * 100;
 
-        // Simple recommendation based on price vs average
+        // Generate recommendation based on multiple factors
         let recommendation = 'HOLD';
-        if (priceChangePercent > 5) {
-          recommendation = 'SELL';
-        } else if (priceChangePercent < -5) {
+        let confidence = 70;
+        const factors = {
+          technical: 0,
+          fundamental: 0,
+          sentiment: 0,
+          prediction: 0
+        };
+
+        // Technical analysis (30% weight)
+        if (sma20 > sma50 && rsi < 70) {
+          factors.technical = 80;
           recommendation = 'BUY';
+        } else if (sma20 < sma50 && rsi > 30) {
+          factors.technical = 20;
+          recommendation = 'SELL';
+        } else {
+          factors.technical = 50;
         }
+
+        // Fundamental analysis (25% weight)
+        if (quote.trailingPE && quote.trailingPE < 20) {
+          factors.fundamental = 80;
+        } else if (quote.trailingPE && quote.trailingPE > 30) {
+          factors.fundamental = 30;
+        } else {
+          factors.fundamental = 60;
+        }
+
+        // Sentiment analysis (25% weight)
+        if (priceChangePercent > 5) {
+          factors.sentiment = 30; // Overbought
+        } else if (priceChangePercent < -5) {
+          factors.sentiment = 80; // Oversold
+        } else {
+          factors.sentiment = 60;
+        }
+
+        // LSTM prediction (20% weight)
+        if (prediction) {
+          factors.prediction = prediction.trend === 'bullish' ? 80 : 20;
+          confidence = prediction.confidence * 100;
+        }
+
+        // Calculate overall confidence
+        const overallScore = (
+          factors.technical * 0.3 +
+          factors.fundamental * 0.25 +
+          factors.sentiment * 0.25 +
+          factors.prediction * 0.2
+        );
+        confidence = Math.round(overallScore);
 
         return {
           statusCode: 200,
@@ -270,21 +387,35 @@ exports.handler = async (event, context) => {
             success: true,
             analysis: {
               symbol: ticker,
-              currentPrice,
+              currentPrice: Math.round(currentPrice * 100) / 100,
               averagePrice: Math.round(avgPrice * 100) / 100,
               priceChange: Math.round(priceChange * 100) / 100,
               priceChangePercent: Math.round(priceChangePercent * 100) / 100,
               recommendation,
-              confidence: Math.random() * 30 + 70, // Mock confidence score
-              factors: {
-                technical: Math.random() * 100,
-                fundamental: Math.random() * 100,
-                sentiment: Math.random() * 100
-              }
+              confidence,
+              factors,
+              technicalIndicators: {
+                sma20: Math.round(sma20 * 100) / 100,
+                sma50: Math.round(sma50 * 100) / 100,
+                rsi: Math.round(rsi * 100) / 100,
+                macd: Math.round(macd * 100) / 100,
+                volatility: Math.round(volatility * 100) / 100
+              },
+              prediction: prediction ? {
+                predictedPrice: prediction.predictedPrice,
+                predictedChangePercent: prediction.predictedChangePercent,
+                trend: prediction.trend,
+                model: prediction.model
+              } : null,
+              volume: quote.regularMarketVolume,
+              marketCap: quote.marketCap,
+              pe: quote.trailingPE,
+              timestamp: new Date().toISOString()
             }
           })
         });
       } catch (error) {
+        console.error('Analysis error:', error);
         return {
           statusCode: 500,
           headers,
