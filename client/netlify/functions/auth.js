@@ -66,7 +66,7 @@ exports.handler = async (event, context) => {
       // Create JWT token
       const token = jwt.sign(
         { userId: user.id, email: user.email },
-        process.env.JWT_SECRET || 'fallback-secret',
+  process.env.JWT_SECRET,
         { expiresIn: '7d' }
       );
 
@@ -115,7 +115,7 @@ exports.handler = async (event, context) => {
       // Create JWT token
       const token = jwt.sign(
         { userId: user.id, email: user.email },
-        process.env.JWT_SECRET || 'fallback-secret',
+  process.env.JWT_SECRET,
         { expiresIn: '7d' }
       );
 
