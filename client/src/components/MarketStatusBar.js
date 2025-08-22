@@ -14,8 +14,7 @@ const MarketStatusBar = () => {
   });
 
   const [time, setTime] = useState(new Date());
-  const [isMarketOpen, setIsMarketOpen] = useState(true);
-  const [flashIndex, setFlashIndex] = useState(0);
+    // Removed unused variables setIsMarketOpen and loading
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
