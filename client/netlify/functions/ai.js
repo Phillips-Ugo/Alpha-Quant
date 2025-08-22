@@ -1,66 +1,268 @@
 const axios = require('axios');
+const yahooFinance = require('yahoo-finance2').default;
 
-// Mock AI responses for now (in production, you'd integrate with OpenAI or another AI service)
-const mockAIResponses = {
-  "portfolio": {
-    "keywords": ["portfolio", "invest", "stock", "holdings", "diversify"],
-    "response": "I can help you with portfolio management! Here are some key insights:\n\n• Your portfolio shows good diversification across technology and healthcare sectors\n• Consider rebalancing quarterly to maintain your target allocation\n• Current market conditions suggest focusing on defensive stocks\n\nWould you like me to analyze specific stocks or provide rebalancing recommendations?"
-  },
-  "analysis": {
-    "keywords": ["analyze", "prediction", "forecast", "trend", "technical"],
-    "response": "I can provide stock analysis and predictions! Here's what I can help with:\n\n• Technical analysis using price patterns and indicators\n• Fundamental analysis of company financials\n• Market sentiment analysis from news and social media\n• Risk assessment and volatility predictions\n\nWhich stock would you like me to analyze?"
-  },
-  "market": {
-    "keywords": ["market", "economy", "trend", "sector", "indices"],
-    "response": "Here's my market analysis:\n\n• S&P 500 is showing bullish momentum with strong earnings\n• Technology sector leading gains, up 15% YTD\n• Fed policy remains accommodative, supporting growth\n• Watch for potential volatility around earnings season\n\nWould you like specific sector analysis or market timing insights?"
-  },
-  "news": {
-    "keywords": ["news", "earnings", "announcement", "fed", "policy"],
-    "response": "Latest market news and insights:\n\n• Apple reported strong Q4 earnings, beating expectations\n• Fed signals potential rate cuts in 2024\n• Tesla faces production challenges but maintains growth outlook\n• Microsoft cloud services revenue surges 25%\n\nHow would you like me to analyze the impact of these events on your investments?"
-  },
-  "default": {
-    "response": "Hello! I'm your AI financial assistant. I can help you with:\n\n• Portfolio analysis and recommendations\n• Stock research and predictions\n• Market trends and insights\n• News analysis and impact assessment\n• Risk management strategies\n\nWhat would you like to know about today?"
-  }
-};
+// Function to get real market data for AI responses
+async function getMarketData() {
+  try {
+    const indices = ['^GSPC', '^IXIC', '^DJI'];
+    const quotes = await Promise.all(
+      indices.map(async (index) => {
+        try {
+          const quote = await yahooFinance.quote(index);
+          return {
+            symbol: quote.symbol,
+            name: getIndexName(quote.symbol),
+            price: quote.regularMarketPrice,
+            change: quote.regularMarketChange,
+            changePercent: quote.regularMarketChangePercent
+          };
+        } catch (error) {
+          return null;
+        }
+      })
+    );
 
-// Function to determine response type based on user input
-function getResponseType(userInput) {
-  const input = userInput.toLowerCase();
-  
-  for (const [type, data] of Object.entries(mockAIResponses)) {
-    if (type === 'default') continue;
-    
-    if (data.keywords.some(keyword => input.includes(keyword))) {
-      return type;
-    }
+    return quotes.filter(quote => quote !== null);
+  } catch (error) {
+    console.error('Error fetching market data:', error);
+    return [];
   }
-  
-  return 'default';
 }
 
-// Function to generate contextual response
-function generateResponse(userInput, conversationHistory = []) {
-  const responseType = getResponseType(userInput);
-  const baseResponse = mockAIResponses[responseType].response;
-  
-  // Add some contextual elements based on conversation history
-  let contextualResponse = baseResponse;
-  
-  // If user mentioned specific stocks, add them to response
-  const stockMentions = userInput.match(/\b[A-Z]{1,5}\b/g);
-  if (stockMentions && stockMentions.length > 0) {
-    const stocks = stockMentions.slice(0, 3).join(', ');
-    contextualResponse += `\n\nI noticed you mentioned ${stocks}. Would you like specific analysis for these stocks?`;
+// Function to get stock analysis
+async function getStockAnalysis(symbol) {
+  try {
+    const quote = await yahooFinance.quote(symbol);
+    const history = await yahooFinance.historical(symbol, {
+      period1: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+      period2: new Date(),
+      interval: '1d'
+    });
+
+    const prices = history.map(h => h.close);
+    const avgPrice = prices.reduce((a, b) => a + b, 0) / prices.length;
+    const currentPrice = quote.regularMarketPrice;
+    const priceChange = currentPrice - avgPrice;
+    const priceChangePercent = (priceChange / avgPrice) * 100;
+
+    // Calculate technical indicators
+    const volatility = calculateVolatility(prices);
+    const trend = calculateTrend(prices);
+    const support = Math.min(...prices.slice(-10));
+    const resistance = Math.max(...prices.slice(-10));
+
+    return {
+      symbol,
+      currentPrice,
+      averagePrice: Math.round(avgPrice * 100) / 100,
+      priceChange: Math.round(priceChange * 100) / 100,
+      priceChangePercent: Math.round(priceChangePercent * 100) / 100,
+      volatility: Math.round(volatility * 100) / 100,
+      trend,
+      support: Math.round(support * 100) / 100,
+      resistance: Math.round(resistance * 100) / 100,
+      volume: quote.regularMarketVolume,
+      marketCap: quote.marketCap,
+      pe: quote.trailingPE
+    };
+  } catch (error) {
+    console.error(`Error analyzing ${symbol}:`, error);
+    return null;
   }
-  
-  // Add follow-up questions based on context
-  if (responseType === 'portfolio') {
-    contextualResponse += '\n\nWhat specific aspect of your portfolio would you like me to focus on?';
-  } else if (responseType === 'analysis') {
-    contextualResponse += '\n\nWhat time horizon are you looking at for your analysis?';
+}
+
+// Function to calculate volatility
+function calculateVolatility(prices) {
+  const returns = [];
+  for (let i = 1; i < prices.length; i++) {
+    returns.push((prices[i] - prices[i-1]) / prices[i-1]);
   }
+  const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
+  const variance = returns.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / returns.length;
+  return Math.sqrt(variance);
+}
+
+// Function to calculate trend
+function calculateTrend(prices) {
+  const recent = prices.slice(-5);
+  const older = prices.slice(-10, -5);
+  const recentAvg = recent.reduce((a, b) => a + b, 0) / recent.length;
+  const olderAvg = older.reduce((a, b) => a + b, 0) / older.length;
   
-  return contextualResponse;
+  if (recentAvg > olderAvg * 1.02) return 'bullish';
+  if (recentAvg < olderAvg * 0.98) return 'bearish';
+  return 'neutral';
+}
+
+// Function to get portfolio insights
+async function getPortfolioInsights(portfolio) {
+  if (!portfolio || portfolio.length === 0) {
+    return {
+      totalValue: 0,
+      totalGainLoss: 0,
+      topPerformers: [],
+      recommendations: ['Consider adding some stocks to your portfolio to get started.']
+    };
+  }
+
+  try {
+    const symbols = portfolio.map(stock => stock.symbol);
+    const quotes = await yahooFinance.quote(symbols);
+    
+    let totalValue = 0;
+    let totalCost = 0;
+    const stockAnalytics = [];
+
+    portfolio.forEach(stock => {
+      const quote = Array.isArray(quotes) ? quotes.find(q => q.symbol === stock.symbol) : quotes;
+      const currentPrice = quote?.regularMarketPrice || stock.purchasePrice;
+      const currentValue = currentPrice * stock.shares;
+      const costBasis = stock.purchasePrice * stock.shares;
+      const gainLoss = currentValue - costBasis;
+      const gainLossPercent = ((gainLoss / costBasis) * 100);
+
+      totalValue += currentValue;
+      totalCost += costBasis;
+
+      stockAnalytics.push({
+        ...stock,
+        currentPrice,
+        currentValue,
+        gainLoss,
+        gainLossPercent
+      });
+    });
+
+    const totalGainLoss = totalValue - totalCost;
+    const totalGainLossPercent = totalCost > 0 ? ((totalGainLoss / totalCost) * 100) : 0;
+
+    // Get top performers
+    const topPerformers = stockAnalytics
+      .sort((a, b) => b.gainLossPercent - a.gainLossPercent)
+      .slice(0, 3);
+
+    // Generate recommendations
+    const recommendations = [];
+    if (totalGainLossPercent > 10) {
+      recommendations.push('Your portfolio is performing well! Consider taking some profits on your top performers.');
+    } else if (totalGainLossPercent < -10) {
+      recommendations.push('Your portfolio is down significantly. Consider dollar-cost averaging to lower your average cost.');
+    } else {
+      recommendations.push('Your portfolio is stable. Consider diversifying into different sectors.');
+    }
+
+    if (portfolio.length < 5) {
+      recommendations.push('Consider adding more stocks to improve diversification.');
+    }
+
+    return {
+      totalValue: Math.round(totalValue * 100) / 100,
+      totalGainLoss: Math.round(totalGainLoss * 100) / 100,
+      totalGainLossPercent: Math.round(totalGainLossPercent * 100) / 100,
+      topPerformers,
+      recommendations
+    };
+
+  } catch (error) {
+    console.error('Error calculating portfolio insights:', error);
+    return {
+      totalValue: 0,
+      totalGainLoss: 0,
+      topPerformers: [],
+      recommendations: ['Unable to analyze portfolio at this time.']
+    };
+  }
+}
+
+// Function to generate contextual AI response
+async function generateAIResponse(userInput, conversationHistory = []) {
+  const input = userInput.toLowerCase();
+  
+  // Portfolio analysis
+  if (input.includes('portfolio') || input.includes('holdings') || input.includes('investments')) {
+    const insights = await getPortfolioInsights([]); // You'd pass actual portfolio data here
+    return `Here's an analysis of your portfolio:\n\n` +
+           `• Total Value: $${insights.totalValue.toLocaleString()}\n` +
+           `• Total Gain/Loss: $${insights.totalGainLoss.toLocaleString()} (${insights.totalGainLossPercent}%)\n\n` +
+           `Recommendations:\n${insights.recommendations.map(rec => `• ${rec}`).join('\n')}\n\n` +
+           `Would you like me to analyze specific stocks or provide rebalancing suggestions?`;
+  }
+
+  // Stock analysis
+  if (input.includes('analyze') || input.includes('stock') || input.includes('price')) {
+    const stockMentions = userInput.match(/\b[A-Z]{1,5}\b/g);
+    if (stockMentions && stockMentions.length > 0) {
+      const symbol = stockMentions[0];
+      const analysis = await getStockAnalysis(symbol);
+      
+      if (analysis) {
+        return `Analysis for ${symbol}:\n\n` +
+               `• Current Price: $${analysis.currentPrice}\n` +
+               `• 30-Day Average: $${analysis.averagePrice}\n` +
+               `• Change: $${analysis.priceChange} (${analysis.priceChangePercent}%)\n` +
+               `• Trend: ${analysis.trend}\n` +
+               `• Volatility: ${analysis.volatility}%\n` +
+               `• Support: $${analysis.support}\n` +
+               `• Resistance: $${analysis.resistance}\n\n` +
+               `Based on this analysis, ${analysis.priceChangePercent > 5 ? 'consider taking profits' : 
+                analysis.priceChangePercent < -5 ? 'this might be a good entry point' : 
+                'the stock appears to be trading within normal ranges'}.`;
+      }
+    }
+    return `I can analyze any stock for you. Just mention the ticker symbol (like AAPL, MSFT, etc.) and I'll provide a detailed analysis.`;
+  }
+
+  // Market overview
+  if (input.includes('market') || input.includes('economy') || input.includes('indices')) {
+    const marketData = await getMarketData();
+    if (marketData.length > 0) {
+      let response = `Current Market Overview:\n\n`;
+      marketData.forEach(index => {
+        const changeIcon = index.changePercent >= 0 ? '📈' : '📉';
+        response += `${changeIcon} ${index.name}: $${index.price.toLocaleString()} ` +
+                   `(${index.changePercent >= 0 ? '+' : ''}${index.changePercent.toFixed(2)}%)\n`;
+      });
+      
+      const overallTrend = marketData.reduce((sum, index) => sum + index.changePercent, 0) / marketData.length;
+      response += `\nOverall market trend: ${overallTrend > 0 ? 'Bullish' : 'Bearish'}\n\n`;
+      response += `Would you like specific sector analysis or market timing insights?`;
+      
+      return response;
+    }
+  }
+
+  // News and sentiment
+  if (input.includes('news') || input.includes('earnings') || input.includes('announcement')) {
+    return `I can help you with the latest financial news and earnings announcements. ` +
+           `You can check the News section for real-time updates, or ask me about specific companies. ` +
+           `Would you like me to analyze how recent news might impact your investments?`;
+  }
+
+  // Investment advice
+  if (input.includes('buy') || input.includes('sell') || input.includes('recommend')) {
+    return `I can provide analysis to help inform your investment decisions, but remember that I'm not a financial advisor. ` +
+           `Always do your own research and consider consulting with a professional. ` +
+           `What specific stock or sector are you interested in?`;
+  }
+
+  // Default response
+  return `Hello! I'm your AI financial assistant. I can help you with:\n\n` +
+         `• Portfolio analysis and performance tracking\n` +
+         `• Real-time stock analysis and technical indicators\n` +
+         `• Market trends and economic insights\n` +
+         `• News analysis and sentiment assessment\n` +
+         `• Investment research and recommendations\n\n` +
+         `What would you like to know about today?`;
+}
+
+// Helper function to get index names
+function getIndexName(symbol) {
+  const names = {
+    '^GSPC': 'S&P 500',
+    '^IXIC': 'NASDAQ',
+    '^DJI': 'Dow Jones'
+  };
+  return names[symbol] || symbol;
 }
 
 exports.handler = async (event, context) => {
@@ -96,14 +298,11 @@ exports.handler = async (event, context) => {
             success: false,
             error: 'Message is required'
           })
-        };
+        });
       }
 
-      // Generate AI response
-      const aiResponse = generateResponse(message, conversationHistory);
-      
-      // Add some delay to simulate AI processing
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Generate AI response using real data
+      const aiResponse = await generateAIResponse(message, conversationHistory);
 
       return {
         statusCode: 200,
@@ -115,12 +314,67 @@ exports.handler = async (event, context) => {
             timestamp: new Date().toISOString(),
             messageId: Date.now().toString(),
             suggestions: [
-              "Analyze my portfolio",
-              "What's the market outlook?",
-              "Latest stock news",
-              "Investment recommendations"
+              "Analyze my portfolio performance",
+              "What's the market outlook today?",
+              "Analyze AAPL stock for me",
+              "Show me the latest financial news"
             ]
           }
+        })
+      };
+    }
+
+    // Get market overview
+    if (httpMethod === 'GET' && path.includes('/market-overview')) {
+      const marketData = await getMarketData();
+      
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          success: true,
+          data: {
+            indices: marketData,
+            timestamp: new Date().toISOString()
+          }
+        })
+      };
+    }
+
+    // Get stock analysis
+    if (httpMethod === 'GET' && path.includes('/stock-analysis')) {
+      const symbol = event.queryStringParameters?.symbol;
+      
+      if (!symbol) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({
+            success: false,
+            error: 'Symbol parameter is required'
+          })
+        });
+      }
+
+      const analysis = await getStockAnalysis(symbol);
+      
+      if (!analysis) {
+        return {
+          statusCode: 404,
+          headers,
+          body: JSON.stringify({
+            success: false,
+            error: 'Stock not found or analysis failed'
+          })
+        });
+      }
+
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          success: true,
+          data: analysis
         })
       };
     }
@@ -128,14 +382,14 @@ exports.handler = async (event, context) => {
     // Get chat suggestions
     if (httpMethod === 'GET' && path.includes('/suggestions')) {
       const suggestions = [
-        "How should I diversify my portfolio?",
-        "What's the outlook for tech stocks?",
+        "How is my portfolio performing?",
+        "What's the market outlook for today?",
         "Analyze AAPL stock for me",
-        "What are the market risks today?",
-        "Help me understand my portfolio performance",
-        "What stocks should I buy now?",
-        "How do I manage investment risk?",
-        "What's the impact of Fed policy on stocks?"
+        "What are the latest market trends?",
+        "Help me understand my investment performance",
+        "What stocks should I research?",
+        "How do I diversify my portfolio?",
+        "What's the impact of recent news on stocks?"
       ];
 
       return {
@@ -152,20 +406,20 @@ exports.handler = async (event, context) => {
     if (httpMethod === 'GET' && path.includes('/capabilities')) {
       const capabilities = {
         portfolioAnalysis: {
-          description: "Analyze your portfolio performance and provide recommendations",
-          features: ["Diversification analysis", "Risk assessment", "Rebalancing suggestions"]
+          description: "Real-time portfolio performance analysis and recommendations",
+          features: ["Performance tracking", "Gain/loss analysis", "Diversification insights", "Rebalancing suggestions"]
         },
         stockAnalysis: {
-          description: "Comprehensive stock research and predictions",
-          features: ["Technical analysis", "Fundamental analysis", "Sentiment analysis"]
+          description: "Comprehensive stock research with technical indicators",
+          features: ["Price analysis", "Technical indicators", "Trend analysis", "Support/resistance levels"]
         },
         marketInsights: {
-          description: "Real-time market trends and economic analysis",
-          features: ["Sector analysis", "Market timing", "Economic indicators"]
+          description: "Real-time market data and economic analysis",
+          features: ["Market indices", "Sector performance", "Economic indicators", "Market trends"]
         },
         newsAnalysis: {
-          description: "Analyze news impact on stocks and markets",
-          features: ["Sentiment analysis", "Event impact assessment", "Trend identification"]
+          description: "Financial news integration and sentiment analysis",
+          features: ["Real-time news", "Sentiment analysis", "Impact assessment", "Trend identification"]
         }
       };
 

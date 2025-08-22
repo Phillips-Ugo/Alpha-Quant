@@ -148,13 +148,32 @@ Set these in your Netlify dashboard:
 # Authentication
 JWT_SECRET=your-super-secret-jwt-key
 
-# API Keys (for future use)
-OPENAI_API_KEY=your-openai-api-key
+# Financial News APIs (for real news data)
+ALPHA_VANTAGE_API_KEY=your-alpha-vantage-api-key
 NEWS_API_KEY=your-news-api-key
+
+# AI Services (for future enhancements)
+OPENAI_API_KEY=your-openai-api-key
 
 # CORS (optional)
 CORS_ORIGIN=https://yourdomain.com
 ```
+
+### API Key Setup
+
+1. **Alpha Vantage API** (Free tier available):
+   - Sign up at: https://www.alphavantage.co/support/#api-key
+   - Provides real-time financial news with sentiment analysis
+   - Free tier: 500 requests/day
+
+2. **NewsAPI** (Alternative):
+   - Sign up at: https://newsapi.org/register
+   - Provides general news with financial filtering
+   - Free tier: 1,000 requests/day
+
+3. **Yahoo Finance** (No API key needed):
+   - Used for real-time stock data and market information
+   - Free and unlimited usage
 
 ## 📊 API Response Format
 
