@@ -105,7 +105,7 @@ router.get('/sentiment', async (req, res) => {
 // Get market news
 async function getMarketNews(category, limit) {
   const axios = require('axios');
-  const ALPHA_VANTAGE_API_KEY = 'F8CLK1GHMVGECNC7';
+  const ALPHA_VANTAGE_API_KEY = process.env.ALPHA_VANTAGE_API_KEY || 'your-alpha-vantage-api-key';
   
   try {
     const response = await axios.get('https://www.alphavantage.co/query', {
@@ -299,7 +299,7 @@ async function generateRecommendations(portfolio) {
 async function getMarketSentiment() {
   // Fetch Alpha Vantage sector performance data
   const axios = require('axios');
-  const ALPHA_VANTAGE_API_KEY = 'F8CLK1GHMVGECNC7';
+  const ALPHA_VANTAGE_API_KEY = process.env.ALPHA_VANTAGE_API_KEY || 'your-alpha-vantage-api-key';
   try {
     const response = await axios.get('https://www.alphavantage.co/query', {
       params: {
