@@ -88,7 +88,7 @@ exports.handler = async (event, context) => {
     }
 
     // Get stock quote
-    if (httpMethod === 'GET' && path.includes('/quote')) {
+    if (httpMethod === 'GET' && (path.includes('/quote') || path.endsWith('/stocks'))) {
       const symbol = queryStringParameters?.symbol;
       
       if (!symbol) {
@@ -112,24 +112,26 @@ exports.handler = async (event, context) => {
             success: true,
             data: {
               symbol: quote.symbol,
-              name: quote.longName || quote.shortName,
-              price: quote.regularMarketPrice,
+              companyName: quote.longName || quote.shortName,
+              currentPrice: quote.regularMarketPrice,
               change: quote.regularMarketChange,
               changePercent: quote.regularMarketChangePercent,
               volume: quote.regularMarketVolume,
               marketCap: quote.marketCap,
-              pe: quote.trailingPE,
-              dividend: quote.dividendRate,
+              peRatio: quote.trailingPE,
               dividendYield: quote.dividendYield,
+              high52Week: quote.fiftyTwoWeekHigh,
+              low52Week: quote.fiftyTwoWeekLow,
+              open: quote.regularMarketOpen,
               high: quote.regularMarketDayHigh,
               low: quote.regularMarketDayLow,
-              open: quote.regularMarketOpen,
               previousClose: quote.regularMarketPreviousClose,
               timestamp: quote.regularMarketTime
             }
           })
         };
       } catch (error) {
+        console.error('Stock quote error:', error);
         return {
           statusCode: 404,
           headers,
@@ -142,7 +144,7 @@ exports.handler = async (event, context) => {
     }
 
     // Search stocks
-    if (httpMethod === 'GET' && path.includes('/search')) {
+    if (httpMethod === 'GET' && (path.includes('/search') || path.endsWith('/stocks'))) {
       const query = queryStringParameters?.q;
       
       if (!query) {
@@ -153,7 +155,7 @@ exports.handler = async (event, context) => {
             success: false,
             error: 'Query parameter is required'
           })
-        });
+        };
       }
 
       try {
@@ -166,8 +168,9 @@ exports.handler = async (event, context) => {
             success: true,
             data: searchResults.slice(0, 10) // Limit to 10 results
           })
-        });
+        };
       } catch (error) {
+        console.error('Stock search error:', error);
         return {
           statusCode: 500,
           headers,
@@ -175,7 +178,7 @@ exports.handler = async (event, context) => {
             success: false,
             error: 'Search failed'
           })
-        });
+        };
       }
     }
 

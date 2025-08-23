@@ -1,0 +1,20 @@
+{
+  "name": "alpha-quant-functions",
+  "version": "1.0.0",
+  "description": "Netlify functions for Alpha Quant",
+  "main": "index.js",
+  "dependencies": {
+    "axios": "^1.11.0",
+    "yahoo-finance2": "^2.9.1",
+    "openai": "^4.0.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
