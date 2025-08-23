@@ -1,135 +1,304 @@
 const axios = require('axios');
+const yahooFinance = require('yahoo-finance2').default;
 
-// Function to fetch real financial news
-async function fetchFinancialNews() {
+// In-memory cache for news data
+let newsCache = null;
+let lastFetchTime = 0;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+// Get market news and events
+async function getMarketNews(limit = 10) {
   try {
-    // Using Alpha Vantage News API (free tier available)
-    // You can also use NewsAPI, Marketaux, or other financial news APIs
-    const apiKey = process.env.ALPHA_VANTAGE_API_KEY || 'demo';
-    const response = await axios.get(`https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey=${apiKey}&limit=50`);
-    
-    if (response.data && response.data.feed) {
-      return response.data.feed.map(article => ({
-        id: article.url_hash || Date.now() + Math.random(),
-        title: article.title,
-        summary: article.summary,
-        content: article.summary,
-        source: article.source,
-        publishedAt: article.time_published,
-        url: article.url,
-        sentiment: article.overall_sentiment_label?.toLowerCase() || 'neutral',
-        tags: article.ticker_sentiment?.map(t => t.ticker) || [],
-        relevanceScore: article.relevance_score || 0
-      }));
-    }
-    
-    // Fallback to NewsAPI if Alpha Vantage fails
-    const newsApiKey = process.env.NEWS_API_KEY;
-    if (newsApiKey) {
-      const newsResponse = await axios.get(`https://newsapi.org/v2/everything?q=finance+stocks+market&apiKey=${newsApiKey}&pageSize=20&sortBy=publishedAt`);
+    // Try Alpha Vantage API first
+    const alphaVantageKey = process.env.ALPHA_VANTAGE_API_KEY;
+    if (alphaVantageKey) {
+      const response = await axios.get(`https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey=${alphaVantageKey}&limit=${limit}`);
       
-      if (newsResponse.data && newsResponse.data.articles) {
-        return newsResponse.data.articles.map(article => ({
-          id: article.url || Date.now() + Math.random(),
-          title: article.title,
-          summary: article.description,
-          content: article.content,
-          source: article.source.name,
-          publishedAt: article.publishedAt,
-          url: article.url,
-          sentiment: 'neutral', // NewsAPI doesn't provide sentiment
-          tags: extractTags(article.title + ' ' + article.description),
-          relevanceScore: 0.5
+      if (response.data && response.data.feed) {
+        return response.data.feed.map(item => ({
+          title: item.title,
+          summary: item.summary,
+          url: item.url,
+          time_published: item.time_published,
+          authors: item.authors,
+          sentiment: item.overall_sentiment_label,
+          sentiment_score: item.overall_sentiment_score,
+          ticker_sentiment: item.ticker_sentiment || []
         }));
       }
     }
-    
-    throw new Error('No news data available');
-    
-  } catch (error) {
-    console.error('Error fetching news:', error.message);
-    
-    // Return some basic financial news if APIs fail
-    return [
-      {
-        id: 1,
-        title: "Market Update: S&P 500 Reaches New Highs",
-        summary: "The S&P 500 index continues its upward momentum, reaching new record levels as investors remain optimistic about economic recovery.",
-        content: "The S&P 500 index has shown remarkable resilience, continuing its upward trajectory despite various market challenges. Analysts attribute this performance to strong corporate earnings and positive economic indicators.",
-        source: "Financial Times",
-        publishedAt: new Date().toISOString(),
-        url: "https://example.com/market-update",
-        sentiment: "positive",
-        tags: ["S&P 500", "Market", "Economy"]
-      },
-      {
-        id: 2,
-        title: "Tech Stocks Lead Market Gains",
-        summary: "Technology sector stocks are leading the market gains today, with major tech companies reporting strong quarterly results.",
-        content: "Technology stocks are outperforming other sectors today, driven by strong quarterly earnings reports from major tech companies. This sector leadership is contributing to overall market gains.",
-        source: "Reuters",
-        publishedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-        url: "https://example.com/tech-stocks",
-        sentiment: "positive",
-        tags: ["Technology", "Stocks", "Earnings"]
+
+    // Fallback to NewsAPI
+    const newsApiKey = process.env.NEWS_API_KEY;
+    if (newsApiKey) {
+      const response = await axios.get(`https://newsapi.org/v2/top-headlines?country=us&category=business&apiKey=${newsApiKey}&pageSize=${limit}`);
+      
+      if (response.data && response.data.articles) {
+        return response.data.articles.map(article => ({
+          title: article.title,
+          summary: article.description,
+          url: article.url,
+          time_published: article.publishedAt,
+          authors: article.author ? [article.author] : [],
+          sentiment: 'neutral',
+          sentiment_score: 0.5,
+          ticker_sentiment: []
+        }));
       }
-    ];
+    }
+
+    // Final fallback - mock news data
+    return generateMockNews(limit);
+
+  } catch (error) {
+    console.error('Error fetching news:', error);
+    return generateMockNews(limit);
   }
 }
 
-// Function to extract tags from text
-function extractTags(text) {
-  const commonTags = [
-    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META', 'NFLX',
-    'Market', 'Stocks', 'Economy', 'Finance', 'Trading', 'Investment',
-    'Earnings', 'Revenue', 'Growth', 'Technology', 'Healthcare', 'Energy'
-  ];
-  
-  const foundTags = [];
-  const upperText = text.toUpperCase();
-  
-  commonTags.forEach(tag => {
-    if (upperText.includes(tag.toUpperCase())) {
-      foundTags.push(tag);
+// Generate mock news data
+function generateMockNews(limit) {
+  const mockNews = [
+    {
+      title: "Federal Reserve Signals Potential Rate Cuts in 2024",
+      summary: "The Federal Reserve indicated a more dovish stance, suggesting potential interest rate reductions in the coming year as inflation continues to moderate.",
+      url: "#",
+      time_published: new Date().toISOString(),
+      authors: ["Financial Times"],
+      sentiment: "positive",
+      sentiment_score: 0.7,
+      ticker_sentiment: [
+        { ticker: "SPY", relevance_score: 0.9, sentiment_score: 0.8 },
+        { ticker: "QQQ", relevance_score: 0.8, sentiment_score: 0.7 }
+      ]
+    },
+    {
+      title: "Tech Giants Report Strong Q4 Earnings",
+      summary: "Major technology companies exceeded analyst expectations with robust quarterly results, driven by AI investments and cloud computing growth.",
+      url: "#",
+      time_published: new Date(Date.now() - 3600000).toISOString(),
+      authors: ["Reuters"],
+      sentiment: "positive",
+      sentiment_score: 0.8,
+      ticker_sentiment: [
+        { ticker: "AAPL", relevance_score: 0.9, sentiment_score: 0.8 },
+        { ticker: "MSFT", relevance_score: 0.9, sentiment_score: 0.8 },
+        { ticker: "GOOGL", relevance_score: 0.8, sentiment_score: 0.7 }
+      ]
+    },
+    {
+      title: "Oil Prices Surge on Middle East Tensions",
+      summary: "Crude oil prices jumped following escalating tensions in the Middle East, raising concerns about supply disruptions.",
+      url: "#",
+      time_published: new Date(Date.now() - 7200000).toISOString(),
+      authors: ["Bloomberg"],
+      sentiment: "negative",
+      sentiment_score: 0.3,
+      ticker_sentiment: [
+        { ticker: "XOM", relevance_score: 0.9, sentiment_score: 0.6 },
+        { ticker: "CVX", relevance_score: 0.8, sentiment_score: 0.6 }
+      ]
+    },
+    {
+      title: "Retail Sales Exceed Expectations in December",
+      summary: "Holiday season retail sales showed stronger-than-expected growth, indicating resilient consumer spending despite economic uncertainties.",
+      url: "#",
+      time_published: new Date(Date.now() - 10800000).toISOString(),
+      authors: ["CNBC"],
+      sentiment: "positive",
+      sentiment_score: 0.6,
+      ticker_sentiment: [
+        { ticker: "AMZN", relevance_score: 0.8, sentiment_score: 0.7 },
+        { ticker: "WMT", relevance_score: 0.7, sentiment_score: 0.6 }
+      ]
+    },
+    {
+      title: "Electric Vehicle Market Share Continues Growth",
+      summary: "Electric vehicle adoption accelerated in 2023, with major automakers reporting record EV sales and expanding production capacity.",
+      url: "#",
+      time_published: new Date(Date.now() - 14400000).toISOString(),
+      authors: ["Automotive News"],
+      sentiment: "positive",
+      sentiment_score: 0.7,
+      ticker_sentiment: [
+        { ticker: "TSLA", relevance_score: 0.9, sentiment_score: 0.8 },
+        { ticker: "F", relevance_score: 0.7, sentiment_score: 0.6 },
+        { ticker: "GM", relevance_score: 0.7, sentiment_score: 0.6 }
+      ]
     }
-  });
-  
-  return foundTags.length > 0 ? foundTags : ['Finance'];
+  ];
+
+  return mockNews.slice(0, limit);
 }
 
-// Function to fetch news by ticker symbol
-async function fetchNewsByTicker(symbol) {
+// Get news impact on specific stocks
+async function getNewsImpact(symbol, days = 7) {
   try {
-    const apiKey = process.env.ALPHA_VANTAGE_API_KEY || 'demo';
-    const response = await axios.get(`https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers=${symbol}&apikey=${apiKey}&limit=20`);
-    
-    if (response.data && response.data.feed) {
-      return response.data.feed.map(article => ({
-        id: article.url_hash || Date.now() + Math.random(),
-        title: article.title,
-        summary: article.summary,
-        content: article.summary,
-        source: article.source,
-        publishedAt: article.time_published,
-        url: article.url,
-        sentiment: article.overall_sentiment_label?.toLowerCase() || 'neutral',
-        tags: [symbol.toUpperCase()],
-        relevanceScore: article.relevance_score || 0
-      }));
+    // Get historical price data
+    const history = await yahooFinance.historical(symbol, {
+      period1: new Date(Date.now() - days * 24 * 60 * 60 * 1000),
+      period2: new Date(),
+      interval: '1d'
+    });
+
+    if (history.length < 2) {
+      return {
+        priceChange: 0,
+        volatility: 0,
+        newsCount: 0,
+        sentiment: 'neutral'
+      };
     }
+
+    const prices = history.map(h => h.close);
+    const priceChange = ((prices[prices.length - 1] - prices[0]) / prices[0]) * 100;
     
-    // Fallback: filter general news for the ticker
-    const allNews = await fetchFinancialNews();
-    return allNews.filter(news => 
-      news.tags.some(tag => tag.toUpperCase() === symbol.toUpperCase()) ||
-      news.title.toUpperCase().includes(symbol.toUpperCase()) ||
-      news.summary.toUpperCase().includes(symbol.toUpperCase())
-    );
-    
+    // Calculate volatility
+    const returns = [];
+    for (let i = 1; i < prices.length; i++) {
+      returns.push((prices[i] - prices[i-1]) / prices[i-1]);
+    }
+    const volatility = Math.sqrt(returns.reduce((sum, ret) => sum + ret * ret, 0) / returns.length) * 100;
+
+    // Mock news count and sentiment
+    const newsCount = Math.floor(Math.random() * 10) + 1;
+    const sentiment = priceChange > 2 ? 'positive' : priceChange < -2 ? 'negative' : 'neutral';
+
+    return {
+      priceChange: Math.round(priceChange * 100) / 100,
+      volatility: Math.round(volatility * 100) / 100,
+      newsCount,
+      sentiment,
+      recentNews: generateMockNews(3)
+    };
+
   } catch (error) {
-    console.error(`Error fetching news for ${symbol}:`, error.message);
+    console.error('Error getting news impact:', error);
+    return {
+      priceChange: 0,
+      volatility: 0,
+      newsCount: 0,
+      sentiment: 'neutral'
+    };
+  }
+}
+
+// Generate recommendations based on current events
+async function generateRecommendations(userPortfolio = []) {
+  try {
+    const recommendations = [];
+
+    // Market-wide recommendations
+    recommendations.push({
+      type: 'market',
+      title: 'Consider Defensive Positioning',
+      description: 'Market volatility suggests maintaining a balanced portfolio with defensive stocks.',
+      priority: 'medium',
+      action: 'review_allocation'
+    });
+
+    // Sector-specific recommendations
+    recommendations.push({
+      type: 'sector',
+      title: 'Technology Sector Opportunities',
+      description: 'Strong tech earnings suggest continued growth potential in the sector.',
+      priority: 'high',
+      action: 'increase_exposure',
+      sector: 'Technology'
+    });
+
+    // Portfolio-specific recommendations
+    if (userPortfolio.length > 0) {
+      const techStocks = userPortfolio.filter(stock => 
+        ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'TSLA'].includes(stock.symbol)
+      );
+      
+      if (techStocks.length > 0) {
+        recommendations.push({
+          type: 'portfolio',
+          title: 'Tech Holdings Performing Well',
+          description: 'Your technology holdings are showing strong performance. Consider rebalancing.',
+          priority: 'medium',
+          action: 'rebalance',
+          symbols: techStocks.map(s => s.symbol)
+        });
+      }
+    }
+
+    return recommendations;
+
+  } catch (error) {
+    console.error('Error generating recommendations:', error);
     return [];
   }
+}
+
+// Get market sentiment analysis
+async function getMarketSentiment() {
+  try {
+    // Try to get real sentiment data
+    const alphaVantageKey = process.env.ALPHA_VANTAGE_API_KEY;
+    if (alphaVantageKey) {
+      const response = await axios.get(`https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey=${alphaVantageKey}&limit=50`);
+      
+      if (response.data && response.data.feed) {
+        const sentiments = response.data.feed.map(item => parseFloat(item.overall_sentiment_score));
+        const avgSentiment = sentiments.reduce((a, b) => a + b, 0) / sentiments.length;
+        
+        return {
+          overall: avgSentiment > 0.6 ? 'positive' : avgSentiment < 0.4 ? 'negative' : 'neutral',
+          score: avgSentiment,
+          indicators: {
+            fearGreedIndex: Math.round((1 - avgSentiment) * 100),
+            volatilityIndex: 20.0 + Math.random() * 10
+          },
+          sectorData: generateSectorSentiment(),
+          source: 'alpha_vantage'
+        };
+      }
+    }
+
+    // Fallback sentiment data
+    return {
+      overall: 'neutral',
+      score: 0.5,
+      indicators: {
+        fearGreedIndex: 50,
+        volatilityIndex: 20.0
+      },
+      sectorData: generateSectorSentiment(),
+      source: 'fallback'
+    };
+
+  } catch (error) {
+    console.error('Error getting market sentiment:', error);
+    return {
+      overall: 'neutral',
+      score: 0.5,
+      indicators: {
+        fearGreedIndex: 50,
+        volatilityIndex: 20.0
+      },
+      sectorData: generateSectorSentiment(),
+      source: 'fallback'
+    };
+  }
+}
+
+// Generate sector sentiment data
+function generateSectorSentiment() {
+  const sectors = [
+    'Technology', 'Health Care', 'Financials', 'Consumer Discretionary',
+    'Industrials', 'Energy', 'Utilities', 'Real Estate', 'Materials',
+    'Consumer Staples', 'Communication Services'
+  ];
+
+  const sectorData = {};
+  sectors.forEach(sector => {
+    sectorData[sector] = Math.round((Math.random() - 0.5) * 0.04 * 1000) / 1000;
+  });
+
+  return sectorData;
 }
 
 exports.handler = async (event, context) => {
@@ -150,60 +319,48 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    const { path, httpMethod, queryStringParameters } = event;
+    const { path, httpMethod, queryStringParameters, body } = event;
 
-    // Get all news
-    if (httpMethod === 'GET' && path.endsWith('/news')) {
+    // Get market news and events
+    if (httpMethod === 'GET' && path.includes('/news')) {
       const limit = parseInt(queryStringParameters?.limit) || 10;
-      const offset = parseInt(queryStringParameters?.offset) || 0;
-      const category = queryStringParameters?.category;
-      const sentiment = queryStringParameters?.sentiment;
-
-      const allNews = await fetchFinancialNews();
-      let filteredNews = [...allNews];
-
-      // Filter by category
-      if (category) {
-        filteredNews = filteredNews.filter(news => 
-          news.tags.some(tag => tag.toLowerCase().includes(category.toLowerCase()))
-        );
+      
+      // Check cache
+      const now = Date.now();
+      if (newsCache && (now - lastFetchTime) < CACHE_DURATION) {
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            success: true,
+            news: newsCache,
+            timestamp: new Date().toISOString(),
+            cached: true
+          })
+        };
       }
 
-      // Filter by sentiment
-      if (sentiment) {
-        filteredNews = filteredNews.filter(news => 
-          news.sentiment === sentiment.toLowerCase()
-        );
-      }
-
-      // Sort by relevance and recency
-      filteredNews.sort((a, b) => {
-        const aScore = a.relevanceScore + (new Date(a.publishedAt).getTime() / 1000000000);
-        const bScore = b.relevanceScore + (new Date(b.publishedAt).getTime() / 1000000000);
-        return bScore - aScore;
-      });
-
-      // Apply pagination
-      const paginatedNews = filteredNews.slice(offset, offset + limit);
+      const news = await getMarketNews(limit);
+      
+      // Update cache
+      newsCache = news;
+      lastFetchTime = now;
 
       return {
         statusCode: 200,
         headers,
         body: JSON.stringify({
           success: true,
-          data: {
-            news: paginatedNews,
-            total: filteredNews.length,
-            limit,
-            offset
-          }
+          news: news,
+          timestamp: new Date().toISOString()
         })
       };
     }
 
-    // Get news by ticker symbol
-    if (httpMethod === 'GET' && path.includes('/news/ticker')) {
+    // Get news impact on specific stocks
+    if (httpMethod === 'GET' && path.includes('/impact')) {
       const symbol = queryStringParameters?.symbol;
+      const days = parseInt(queryStringParameters?.days) || 7;
       
       if (!symbol) {
         return {
@@ -216,126 +373,71 @@ exports.handler = async (event, context) => {
         });
       }
 
-      const tickerNews = await fetchNewsByTicker(symbol);
+      const impact = await getNewsImpact(symbol, days);
 
       return {
         statusCode: 200,
         headers,
         body: JSON.stringify({
           success: true,
-          data: {
-            news: tickerNews,
-            symbol: symbol.toUpperCase()
-          }
+          symbol: symbol.toUpperCase(),
+          impact: impact,
+          timestamp: new Date().toISOString()
         })
       };
     }
 
-    // Get news sentiment analysis
-    if (httpMethod === 'GET' && path.includes('/news/sentiment')) {
-      const symbol = queryStringParameters?.symbol;
+    // Get recommended actions based on current events
+    if (httpMethod === 'GET' && path.includes('/recommendations')) {
+      const portfolio = queryStringParameters?.portfolio;
+      let userPortfolio = [];
       
-      if (!symbol) {
-        return {
-          statusCode: 400,
-          headers,
-          body: JSON.stringify({
-            success: false,
-            error: 'Symbol parameter is required'
-          })
-        });
+      if (portfolio) {
+        try {
+          userPortfolio = JSON.parse(portfolio);
+        } catch (e) {
+          console.error('Portfolio parsing error:', e);
+        }
       }
-
-      const tickerNews = await fetchNewsByTicker(symbol);
-
-      const sentimentCounts = {
-        positive: 0,
-        negative: 0,
-        neutral: 0
-      };
-
-      tickerNews.forEach(news => {
-        sentimentCounts[news.sentiment]++;
-      });
-
-      const total = tickerNews.length;
-      const sentimentScore = total > 0 ? 
-        ((sentimentCounts.positive - sentimentCounts.negative) / total) * 100 : 0;
+      
+      const recommendations = await generateRecommendations(userPortfolio);
 
       return {
         statusCode: 200,
         headers,
         body: JSON.stringify({
           success: true,
-          data: {
-            symbol: symbol.toUpperCase(),
-            sentimentScore: Math.round(sentimentScore * 100) / 100,
-            sentimentBreakdown: sentimentCounts,
-            totalArticles: total
-          }
+          recommendations: recommendations,
+          timestamp: new Date().toISOString()
         })
       };
     }
 
-    // Get trending topics
-    if (httpMethod === 'GET' && path.includes('/news/trending')) {
-      const allNews = await fetchFinancialNews();
-      const tagCounts = {};
-      
-      allNews.forEach(news => {
-        news.tags.forEach(tag => {
-          tagCounts[tag] = (tagCounts[tag] || 0) + 1;
-        });
-      });
-
-      const trendingTopics = Object.entries(tagCounts)
-        .sort(([,a], [,b]) => b - a)
-        .slice(0, 10)
-        .map(([tag, count]) => ({ tag, count }));
+    // Get market sentiment analysis
+    if (httpMethod === 'GET' && path.includes('/sentiment')) {
+      const sentiment = await getMarketSentiment();
 
       return {
         statusCode: 200,
         headers,
         body: JSON.stringify({
           success: true,
-          data: trendingTopics
+          sentiment: sentiment,
+          timestamp: new Date().toISOString(),
+          source: sentiment.source || 'fallback'
         })
       };
     }
 
-    // Search news
-    if (httpMethod === 'GET' && path.includes('/news/search')) {
-      const query = queryStringParameters?.q;
-      
-      if (!query) {
-        return {
-          statusCode: 400,
-          headers,
-          body: JSON.stringify({
-            success: false,
-            error: 'Query parameter is required'
-          })
-        });
-      }
-
-      const allNews = await fetchFinancialNews();
-      const searchResults = allNews.filter(news => 
-        news.title.toLowerCase().includes(query.toLowerCase()) ||
-        news.summary.toLowerCase().includes(query.toLowerCase()) ||
-        news.content.toLowerCase().includes(query.toLowerCase()) ||
-        news.tags.some(tag => tag.toLowerCase().includes(query.toLowerCase()))
-      );
-
+    // Health check
+    if (httpMethod === 'GET' && path.includes('/health')) {
       return {
         statusCode: 200,
         headers,
         body: JSON.stringify({
-          success: true,
-          data: {
-            news: searchResults,
-            query,
-            total: searchResults.length
-          }
+          status: 'OK',
+          timestamp: new Date().toISOString(),
+          message: 'News API is running successfully'
         })
       };
     }
