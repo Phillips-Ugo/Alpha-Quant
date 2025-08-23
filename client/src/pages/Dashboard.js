@@ -61,10 +61,10 @@ const Dashboard = () => {
 
       // Build portfolio value history (example: use purchaseDate and currentValue)
       // You may want to keep a real history in backend/db; here we mock with current value
-      const history = portfolioData.map(stock => ({
-        date: stock.purchaseDate || new Date().toISOString().split('T')[0],
-        portfolioValue: stock.currentValue || 0
-      }));
+      // const history = portfolioData.map(stock => ({
+      //   date: stock.purchaseDate || new Date().toISOString().split('T')[0],
+      //   portfolioValue: stock.currentValue || 0
+      // }));
 
       // Portfolio analytics are included in the portfolio response
       const portfolioAnalytics = portfolioRes.data.analytics || {};
@@ -113,10 +113,10 @@ const Dashboard = () => {
     }
     setAdding(true);
     try {
-      await axios.post('/api/portfolio/add', {
+      await axios.post('/.netlify/functions/portfolio', {
         symbol: selectedStock.symbol,
-        shares,
-        purchasePrice,
+        shares: Number(shares),
+        purchasePrice: Number(purchasePrice),
         purchaseDate
       });
       toast.success('Stock added!');
@@ -139,7 +139,7 @@ const Dashboard = () => {
     }
 
     try {
-      await axios.delete(`/api/portfolio/remove/${stockId}`);
+      await axios.delete(`/.netlify/functions/portfolio?id=${stockId}`);
       toast.success(`${symbol} removed from portfolio`);
       fetchDashboardData(); // Refresh the portfolio data
     } catch (error) {
