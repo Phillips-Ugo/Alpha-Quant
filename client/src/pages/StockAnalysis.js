@@ -64,18 +64,23 @@ const StockAnalysis = () => {
       }
 
       // Get LSTM prediction
-      const lstmResponse = await axios.post('/.netlify/functions/lstm-predict', {
-        symbol: symbol.toUpperCase(),
-        daysAhead: 30
-      });
-
-      if (lstmResponse.data.success) {
-        setStatistics({
-          ...statistics,
-          lstmPrediction: lstmResponse.data.data
+      try {
+        const lstmResponse = await axios.post('/.netlify/functions/lstm-predict', {
+          symbol: symbol.toUpperCase(),
+          daysAhead: 30
         });
-      } else {
-        console.warn('Failed to load LSTM prediction:', lstmResponse.data.error);
+
+        if (lstmResponse.data.success) {
+          setStatistics({
+            ...statistics,
+            lstmPrediction: lstmResponse.data.data
+          });
+        } else {
+          console.warn('Failed to load LSTM prediction:', lstmResponse.data.error);
+        }
+      } catch (lstmError) {
+        console.warn('LSTM prediction failed:', lstmError);
+        // Don't show error toast for LSTM as it's optional
       }
 
     } catch (error) {

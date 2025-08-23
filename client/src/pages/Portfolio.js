@@ -29,6 +29,9 @@ const Portfolio = () => {
       if (response.data.success) {
         setPortfolio(response.data.portfolio || []);
         setAnalytics(response.data.analytics || null);
+      } else {
+        console.error('Portfolio response error:', response.data.error);
+        toast.error('Failed to load portfolio data');
       }
     } catch (error) {
       console.error('Error fetching portfolio data:', error);

@@ -22,7 +22,7 @@ const MarketStatusBar = () => {
       try {
         const response = await axios.get('/.netlify/functions/market/market-overview');
         if (response.data.success) {
-          const data = response.data.indices;
+          const data = response.data.indices || {};
           setMarketData({
             sp500: {
               value: data.sp500?.price || 0,

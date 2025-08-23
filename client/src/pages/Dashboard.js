@@ -56,25 +56,30 @@ const Dashboard = () => {
     try {
       // Fetch portfolio first
       const portfolioRes = await axios.get('/.netlify/functions/portfolio');
-      const portfolioData = portfolioRes.data.portfolio || [];
-      setPortfolio(portfolioData);
+      if (portfolioRes.data.success) {
+        const portfolioData = portfolioRes.data.portfolio || [];
+        setPortfolio(portfolioData);
+        
+        // Portfolio analytics are included in the portfolio response
+        const portfolioAnalytics = portfolioRes.data.analytics || {};
+        setAnalytics(portfolioAnalytics);
+      } else {
+        console.error('Portfolio response error:', portfolioRes.data.error);
+        toast.error('Failed to load portfolio data');
+      }
 
-      // Build portfolio value history (example: use purchaseDate and currentValue)
-      // You may want to keep a real history in backend/db; here we mock with current value
-      // const history = portfolioData.map(stock => ({
-      //   date: stock.purchaseDate || new Date().toISOString().split('T')[0],
-      //   portfolioValue: stock.currentValue || 0
-      // }));
-
-      // Portfolio analytics are included in the portfolio response
-      const portfolioAnalytics = portfolioRes.data.analytics || {};
-      
       // Get market overview
-      const marketRes = await axios.get('/.netlify/functions/market/market-overview');
-      setMarketOverview(marketRes.data || {});
-      
-      // Set analytics from portfolio response
-      setAnalytics(portfolioAnalytics);
+      try {
+        const marketRes = await axios.get('/.netlify/functions/market/market-overview');
+        if (marketRes.data.success) {
+          setMarketOverview(marketRes.data);
+        } else {
+          console.error('Market response error:', marketRes.data.error);
+        }
+      } catch (marketError) {
+        console.error('Market data fetch error:', marketError);
+        // Don't show error toast for market data as it's not critical
+      }
     } catch (error) {
       console.error('Dashboard data fetch error:', error);
       toast.error('Failed to load dashboard data');

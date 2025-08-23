@@ -44,8 +44,18 @@ const News = () => {
         axios.get('/.netlify/functions/news/sentiment')
       ]);
 
-      setNews(newsRes.data.news);
-      setSentiment(sentimentRes.data.sentiment);
+      if (newsRes.data.success) {
+        setNews(newsRes.data.news || []);
+      } else {
+        console.error('News response error:', newsRes.data.error);
+      }
+
+      if (sentimentRes.data.success) {
+        setSentiment(sentimentRes.data.sentiment || {});
+      } else {
+        console.error('Sentiment response error:', sentimentRes.data.error);
+      }
+
       setTrending([]); // Trending not implemented in new functions
     } catch (error) {
       console.error('Failed to fetch news data:', error);
@@ -58,7 +68,11 @@ const News = () => {
   const fetchPortfolio = async () => {
     try {
       const response = await axios.get('/.netlify/functions/portfolio');
-      setPortfolio(response.data);
+      if (response.data.success) {
+        setPortfolio(response.data);
+      } else {
+        console.error('Portfolio response error:', response.data.error);
+      }
     } catch (error) {
       console.error('Failed to fetch portfolio:', error);
     }
