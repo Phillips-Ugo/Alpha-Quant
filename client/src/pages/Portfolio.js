@@ -25,7 +25,7 @@ const Portfolio = () => {
 
   const fetchPortfolioData = async () => {
     try {
-      const response = await axios.get('/api/portfolio');
+      const response = await axios.get('/.netlify/functions/portfolio');
       if (response.data.success) {
         setPortfolio(response.data.portfolio || []);
         setAnalytics(response.data.analytics || null);

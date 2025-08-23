@@ -20,7 +20,7 @@ const MarketStatusBar = () => {
   useEffect(() => {
     const fetchMarketData = async () => {
       try {
-        const response = await axios.get('/api/stocks/market-overview');
+        const response = await axios.get('/.netlify/functions/market/market-overview');
         if (response.data.success) {
           const data = response.data.indices;
           setMarketData({

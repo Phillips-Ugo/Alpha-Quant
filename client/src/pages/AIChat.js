@@ -27,7 +27,7 @@ const AIChat = () => {
 
   const fetchChatHistory = async () => {
     try {
-      const response = await axios.get('/api/ai/chat');
+      const response = await axios.get('/.netlify/functions/ai/chat');
       setMessages(response.data.messages || []);
     } catch (error) {
       console.error('Failed to fetch chat history:', error);
@@ -36,7 +36,7 @@ const AIChat = () => {
 
   const fetchPortfolio = async () => {
     try {
-      const response = await axios.get('/api/portfolio');
+      const response = await axios.get('/.netlify/functions/portfolio');
       setPortfolio(response.data);
     } catch (error) {
       console.error('Failed to fetch portfolio:', error);
@@ -64,9 +64,9 @@ const AIChat = () => {
     setLoading(true);
 
     try {
-      const response = await axios.post('/api/ai/chat', {
+      const response = await axios.post('/.netlify/functions/ai/chat', {
         message: inputMessage,
-        portfolioContext: portfolio
+        portfolioContext: portfolio?.portfolio
       });
 
       const aiMessage = {
@@ -90,7 +90,7 @@ const AIChat = () => {
 
   const clearChat = async () => {
     try {
-      await axios.delete('/api/ai/chat');
+      await axios.delete('/.netlify/functions/ai/chat');
       setMessages([]);
       toast.success('Chat history cleared');
     } catch (error) {

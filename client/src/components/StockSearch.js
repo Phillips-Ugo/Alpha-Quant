@@ -34,9 +34,9 @@ const StockSearch = ({ onStockSelect, placeholder = "Search stocks..." }) => {
 
       setLoading(true);
       try {
-        const response = await axios.get(`/api/stocks/search?query=${encodeURIComponent(query)}`);
+        const response = await axios.get(`/.netlify/functions/stocks/search?q=${encodeURIComponent(query)}`);
         if (response.data.success) {
-          setResults(response.data.results || []);
+          setResults(response.data.data || []);
           setShowResults(true);
           setSelectedIndex(-1);
         }

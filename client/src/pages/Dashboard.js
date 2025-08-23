@@ -55,7 +55,7 @@ const Dashboard = () => {
   const fetchDashboardData = async () => {
     try {
       // Fetch portfolio first
-      const portfolioRes = await axios.get('/api/portfolio');
+      const portfolioRes = await axios.get('/.netlify/functions/portfolio');
       const portfolioData = portfolioRes.data.portfolio || [];
       setPortfolio(portfolioData);
 
@@ -66,31 +66,15 @@ const Dashboard = () => {
         portfolioValue: stock.currentValue || 0
       }));
 
-      // Fetch both analytics endpoints
-      // 1. Portfolio analytics for correct total values
-      const portfolioAnalyticsRes = await axios.get('/api/portfolio/analytics');
-      const portfolioAnalytics = portfolioAnalyticsRes.data || {};
+      // Portfolio analytics are included in the portfolio response
+      const portfolioAnalytics = portfolioRes.data.analytics || {};
       
-      // 2. AI analytics for sector breakdown and charts
-      const aiAnalyticsRes = await axios.post('/api/ai/analytics', {
-        portfolio: portfolioData,
-        history
-      });
-      const aiAnalytics = aiAnalyticsRes.data || {};
-      
-      // Merge analytics data: use portfolio analytics for totals, AI analytics for charts
-      const mergedAnalytics = {
-        ...aiAnalytics,
-        totalValue: portfolioAnalytics.totalValue || 0,
-        totalGainLoss: portfolioAnalytics.totalGainLoss || 0,
-        totalGainLossPercentage: portfolioAnalytics.totalGainLossPercentage || 0
-      };
-      
-      setAnalytics(mergedAnalytics);
-
-      // Market overview (now from Alpha Vantage economic indicators)
-      const marketRes = await axios.get('/api/market-overview');
+      // Get market overview
+      const marketRes = await axios.get('/.netlify/functions/market/market-overview');
       setMarketOverview(marketRes.data || {});
+      
+      // Set analytics from portfolio response
+      setAnalytics(portfolioAnalytics);
     } catch (error) {
       console.error('Dashboard data fetch error:', error);
       toast.error('Failed to load dashboard data');

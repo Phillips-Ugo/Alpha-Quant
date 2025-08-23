@@ -40,36 +40,42 @@ const StockAnalysis = () => {
 
     try {
       // First get current stock data
-      const dataResponse = await axios.get(`/api/stocks/data/${symbol.toUpperCase()}`);
+      const dataResponse = await axios.get(`/.netlify/functions/stocks/quote?symbol=${symbol.toUpperCase()}`);
       
       if (dataResponse.data.success) {
-        setStockData(dataResponse.data);
+        setStockData(dataResponse.data.data);
         toast.success(`Data loaded for ${symbol.toUpperCase()}`);
       } else {
         toast.error(dataResponse.data.error || 'Failed to load stock data');
         return;
       }
 
-      // Then get prediction
-      const predictionResponse = await axios.post('/api/stocks/analyze', {
+      // Then get prediction and analysis
+      const predictionResponse = await axios.post('/.netlify/functions/stocks/analyze', {
         ticker: symbol.toUpperCase(),
         daysAhead: 30
       });
 
       if (predictionResponse.data.success) {
-        setPrediction(predictionResponse.data);
+        setPrediction(predictionResponse.data.analysis);
         toast.success('Analysis completed!');
       } else {
         toast.error(predictionResponse.data.error || 'Failed to generate prediction');
       }
 
-      // Get statistics and chart data
-      const statisticsResponse = await axios.get(`/api/stocks/statistics/${symbol.toUpperCase()}`);
-      
-      if (statisticsResponse.data.success) {
-        setStatistics(statisticsResponse.data);
+      // Get LSTM prediction
+      const lstmResponse = await axios.post('/.netlify/functions/lstm-predict', {
+        symbol: symbol.toUpperCase(),
+        daysAhead: 30
+      });
+
+      if (lstmResponse.data.success) {
+        setStatistics({
+          ...statistics,
+          lstmPrediction: lstmResponse.data.data
+        });
       } else {
-        console.warn('Failed to load statistics:', statisticsResponse.data.error);
+        console.warn('Failed to load LSTM prediction:', lstmResponse.data.error);
       }
 
     } catch (error) {

@@ -13,35 +13,39 @@ const UploadPortfolioQuickAction = ({ onPortfolioUpdate }) => {
     setUploadedFile(file);
     setLoading(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const response = await fetch('/api/upload/portfolio', {
-        method: 'POST',
-        body: formData
-      });
-      if (response.ok) {
-        const data = await response.json();
-        toast.success('Portfolio file processed!');
-        // Send extracted portfolio to backend for saving
-        const batchRes = await fetch('/api/portfolio/batch-add', {
+      // Convert file to base64
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64Content = reader.result.split(',')[1]; // Remove data URL prefix
+        
+        const response = await fetch('/.netlify/functions/upload', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ stocks: data.extractedData || [] })
+          body: JSON.stringify({
+            fileContent: base64Content,
+            fileName: file.name,
+            fileType: file.type
+          })
         });
-        if (batchRes.ok) {
-          const batchData = await batchRes.json();
-          toast.success('Portfolio updated!');
-          if (onPortfolioUpdate) {
-            onPortfolioUpdate(batchData.portfolio || []);
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            toast.success('Portfolio file processed!');
+            if (onPortfolioUpdate) {
+              onPortfolioUpdate(data.portfolio || []);
+            }
+          } else {
+            throw new Error(data.error || 'Upload failed');
           }
         } else {
-          throw new Error('Failed to save portfolio');
+          throw new Error('Upload failed');
         }
-      } else {
-        throw new Error('Upload failed');
-      }
+      };
+      
+      reader.readAsDataURL(file);
     } catch (error) {
       console.error('Upload error:', error);
       toast.error('Failed to upload portfolio file');

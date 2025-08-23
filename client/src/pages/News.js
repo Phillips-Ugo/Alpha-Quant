@@ -17,7 +17,7 @@ const News = () => {
 
   const fetchRecommendations = useCallback(async () => {
     try {
-      const response = await axios.get('/api/news/recommendations', {
+      const response = await axios.get('/.netlify/functions/news/recommendations', {
         params: { portfolio: JSON.stringify(portfolio.portfolio) }
       });
       setRecommendations(response.data.recommendations);
@@ -39,15 +39,14 @@ const News = () => {
 
   const fetchNewsData = async () => {
     try {
-      const [newsRes, sentimentRes, trendingRes] = await Promise.all([
-        axios.get('/api/news'),
-        axios.get('/api/news/sentiment'),
-        axios.get('/api/news/trending')
+      const [newsRes, sentimentRes] = await Promise.all([
+        axios.get('/.netlify/functions/news'),
+        axios.get('/.netlify/functions/news/sentiment')
       ]);
 
       setNews(newsRes.data.news);
       setSentiment(sentimentRes.data.sentiment);
-      setTrending(trendingRes.data.trending);
+      setTrending([]); // Trending not implemented in new functions
     } catch (error) {
       console.error('Failed to fetch news data:', error);
       toast.error('Failed to load news data');
@@ -58,7 +57,7 @@ const News = () => {
 
   const fetchPortfolio = async () => {
     try {
-      const response = await axios.get('/api/portfolio');
+      const response = await axios.get('/.netlify/functions/portfolio');
       setPortfolio(response.data);
     } catch (error) {
       console.error('Failed to fetch portfolio:', error);
